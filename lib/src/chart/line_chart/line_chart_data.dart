@@ -43,6 +43,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
   LineChartData({
     this.lineBarsData = const [],
     this.betweenBarsData = const [],
+    this.backgroundBlocks = const [],
     super.titlesData = const FlTitlesData(),
     super.extraLinesData = const ExtraLinesData(),
     this.lineTouchData = const LineTouchData(),
@@ -71,6 +72,9 @@ class LineChartData extends AxisChartData with EquatableMixin {
 
   /// Fills area between two [LineChartBarData] with a color or gradient.
   final List<BetweenBarsData> betweenBarsData;
+
+  /// 背景區塊清單
+  final List<BackgroundBlockData> backgroundBlocks;
 
   /// Handles touch behaviors and responses.
   final LineTouchData lineTouchData;
@@ -121,6 +125,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
   LineChartData copyWith({
     List<LineChartBarData>? lineBarsData,
     List<BetweenBarsData>? betweenBarsData,
+    List<BackgroundBlockData>? backgroundBlocks,
     FlTitlesData? titlesData,
     RangeAnnotations? rangeAnnotations,
     ExtraLinesData? extraLinesData,
@@ -141,6 +146,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
       LineChartData(
         lineBarsData: lineBarsData ?? this.lineBarsData,
         betweenBarsData: betweenBarsData ?? this.betweenBarsData,
+        backgroundBlocks: backgroundBlocks ?? this.backgroundBlocks,
         titlesData: titlesData ?? this.titlesData,
         rangeAnnotations: rangeAnnotations ?? this.rangeAnnotations,
         extraLinesData: extraLinesData ?? this.extraLinesData,
@@ -165,6 +171,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
   List<Object?> get props => [
         lineBarsData,
         betweenBarsData,
+        backgroundBlocks,
         titlesData,
         extraLinesData,
         lineTouchData,
@@ -1299,11 +1306,15 @@ class LineTouchResponse extends AxisBaseTouchResponse {
     required super.touchLocation,
     required super.touchChartCoordinate,
     this.lineBarSpots,
+    this.touchedBackgroundBlock,
   });
 
   /// touch happened on these spots
   /// (if a single line provided on the chart, [lineBarSpots]'s length will be 1 always)
   final List<TouchLineBarSpot>? lineBarSpots;
+
+  /// 被觸碰的背景區塊
+  final TouchedBackgroundBlock? touchedBackgroundBlock;
 
   /// Copies current [LineTouchResponse] to a new [LineTouchResponse],
   /// and replaces provided values.
@@ -1311,11 +1322,13 @@ class LineTouchResponse extends AxisBaseTouchResponse {
     Offset? touchLocation,
     Offset? touchChartCoordinate,
     List<TouchLineBarSpot>? lineBarSpots,
+    TouchedBackgroundBlock? touchedBackgroundBlock,
   }) =>
       LineTouchResponse(
         touchLocation: touchLocation ?? this.touchLocation,
         touchChartCoordinate: touchChartCoordinate ?? this.touchChartCoordinate,
         lineBarSpots: lineBarSpots ?? this.lineBarSpots,
+        touchedBackgroundBlock: touchedBackgroundBlock ?? this.touchedBackgroundBlock,
       );
 }
 
@@ -1352,4 +1365,195 @@ class LineChartDataTween extends Tween<LineChartData> {
   /// Lerps a [LineChartData] based on [t] value, check [Tween.lerp].
   @override
   LineChartData lerp(double t) => begin!.lerp(begin!, end!, t);
+}
+
+// 在 BetweenBarsData 類別後面新增以下程式碼
+
+/// 定義背景區塊資料
+class BackgroundBlockData with EquatableMixin {
+  /// 建立背景區塊
+  /// [startX] 是區塊的起始 X 座標
+  /// [endX] 是區塊的結束 X 座標
+  /// [color] 是區塊的顏色，如果同時提供 [gradient] 則會拋出例外
+  /// [gradient] 是區塊的漸層色彩，如果同時提供 [color] 則會拋出例外
+  /// [show] 決定是否顯示此區塊
+  /// [tooltipData] 包含此區塊的 tooltip 資訊
+  BackgroundBlockData({
+    required this.startX,
+    required this.endX,
+    Color? color,
+    this.gradient,
+    this.show = true,
+    this.tooltipData,
+  }) : color = color ??
+            ((color == null && gradient == null)
+                ? Colors.grey.withOpacity(0.2)
+                : null) {
+    if (color != null && gradient != null) {
+      throw ArgumentError('不能同時提供 color 和 gradient');
+    }
+  }
+
+  /// 區塊的起始 X 座標
+  final double startX;
+
+  /// 區塊的結束 X 座標
+  final double endX;
+
+  /// 區塊的顏色
+  final Color? color;
+
+  /// 區塊的漸層色彩
+  final Gradient? gradient;
+
+  /// 是否顯示區塊
+  final bool show;
+
+  /// 背景區塊的 tooltip 資料
+  final BackgroundBlockTooltipData? tooltipData;
+
+  /// 複製當前 [BackgroundBlockData] 並替換提供的值
+  BackgroundBlockData copyWith({
+    double? startX,
+    double? endX,
+    Color? color,
+    Gradient? gradient,
+    bool? show,
+    BackgroundBlockTooltipData? tooltipData,
+  }) =>
+      BackgroundBlockData(
+        startX: startX ?? this.startX,
+        endX: endX ?? this.endX,
+        color: color ?? this.color,
+        gradient: gradient ?? this.gradient,
+        show: show ?? this.show,
+        tooltipData: tooltipData ?? this.tooltipData,
+      );
+
+  /// 線性插值
+  static BackgroundBlockData lerp(
+    BackgroundBlockData a,
+    BackgroundBlockData b,
+    double t,
+  ) =>
+      BackgroundBlockData(
+        startX: lerpDouble(a.startX, b.startX, t) ?? 0,
+        endX: lerpDouble(a.endX, b.endX, t) ?? 0,
+        color: Color.lerp(a.color, b.color, t),
+        gradient: Gradient.lerp(a.gradient, b.gradient, t),
+        show: b.show,
+        tooltipData:
+            BackgroundBlockTooltipData.lerp(a.tooltipData, b.tooltipData, t),
+      );
+
+  @override
+  List<Object?> get props => [
+        startX,
+        endX,
+        color,
+        gradient,
+        show,
+        tooltipData,
+      ];
+}
+
+/// 背景區塊的 tooltip 資料
+class BackgroundBlockTooltipData with EquatableMixin {
+  /// 建立背景區塊的 tooltip 資料
+  const BackgroundBlockTooltipData({
+    this.text = '',
+    this.textStyle = const TextStyle(
+      color: Colors.white,
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+    ),
+    this.backgroundColor = Colors.black87,
+    this.borderRadius = const BorderRadius.all(Radius.circular(4)),
+    this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  });
+
+  /// tooltip 顯示的文字
+  final String text;
+
+  /// 文字樣式
+  final TextStyle textStyle;
+
+  /// 背景顏色
+  final Color backgroundColor;
+
+  /// 圓角半徑
+  final BorderRadius borderRadius;
+
+  /// 內邊距
+  final EdgeInsets padding;
+
+  /// 複製並替換指定值
+  BackgroundBlockTooltipData copyWith({
+    String? text,
+    TextStyle? textStyle,
+    Color? backgroundColor,
+    BorderRadius? borderRadius,
+    EdgeInsets? padding,
+  }) =>
+      BackgroundBlockTooltipData(
+        text: text ?? this.text,
+        textStyle: textStyle ?? this.textStyle,
+        backgroundColor: backgroundColor ?? this.backgroundColor,
+        borderRadius: borderRadius ?? this.borderRadius,
+        padding: padding ?? this.padding,
+      );
+
+  /// 線性插值
+  static BackgroundBlockTooltipData? lerp(
+    BackgroundBlockTooltipData? a,
+    BackgroundBlockTooltipData? b,
+    double t,
+  ) {
+    if (a == null && b == null) return null;
+    if (a == null) return b;
+    if (b == null) return a;
+
+    return BackgroundBlockTooltipData(
+      text: b.text,
+      textStyle: TextStyle.lerp(a.textStyle, b.textStyle, t) ?? b.textStyle,
+      backgroundColor: Color.lerp(a.backgroundColor, b.backgroundColor, t) ??
+          b.backgroundColor,
+      borderRadius: BorderRadius.lerp(a.borderRadius, b.borderRadius, t) ??
+          b.borderRadius,
+      padding: EdgeInsets.lerp(a.padding, b.padding, t) ?? b.padding,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        text,
+        textStyle,
+        backgroundColor,
+        borderRadius,
+        padding,
+      ];
+}
+
+// 在檔案末尾新增以下類別
+
+/// 被觸碰的背景區塊資訊
+class TouchedBackgroundBlock with EquatableMixin {
+  /// 建立被觸碰的背景區塊資訊
+  const TouchedBackgroundBlock({
+    required this.blockData,
+    required this.blockIndex,
+    required this.touchX,
+  });
+
+  /// 被觸碰的背景區塊資料
+  final BackgroundBlockData blockData;
+
+  /// 區塊在清單中的索引
+  final int blockIndex;
+
+  /// 觸碰的 X 座標
+  final double touchX;
+
+  @override
+  List<Object?> get props => [blockData, blockIndex, touchX];
 }

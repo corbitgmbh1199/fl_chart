@@ -53,6 +53,8 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
 
   final Map<int, List<int>> _showingTouchedIndicators = {};
 
+  TouchedBackgroundBlock? _touchedBackgroundBlock;
+
   final _lineChartHelper = LineChartHelper();
 
   @override
@@ -138,11 +140,35 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       setState(() {
         _showingTouchedTooltips.clear();
         _showingTouchedIndicators.clear();
+        _touchedBackgroundBlock = null;
+      });
+      return;
+    }
+
+    // 處理背景區塊觸碰
+    if (touchResponse.touchedBackgroundBlock != null) {
+      setState(() {
+        _touchedBackgroundBlock = touchResponse.touchedBackgroundBlock;
+        _showingTouchedTooltips.clear();
+        _showingTouchedIndicators.clear();
+      });
+      return;
+    }
+
+    // 處理線條觸碰
+    if (touchResponse.lineBarSpots == null ||
+        touchResponse.lineBarSpots!.isEmpty) {
+      setState(() {
+        _showingTouchedTooltips.clear();
+        _showingTouchedIndicators.clear();
+        _touchedBackgroundBlock = null; // 新增這一行
       });
       return;
     }
 
     setState(() {
+      _touchedBackgroundBlock = null;
+      
       final sortedLineSpots = List.of(touchResponse.lineBarSpots!)
         ..sort((spot1, spot2) => spot2.y.compareTo(spot1.y));
 

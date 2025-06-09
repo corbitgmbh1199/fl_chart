@@ -21,6 +21,10 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
   /// [textScale] used for scaling texts inside the chart,
   /// parent can use [MediaQuery.textScaleFactor] to respect
   /// the system's font size.
+  /// 
+  
+  late Paint _backgroundBlockPaint;
+
   LineChartPainter() : super() {
     _barPaint = Paint()..style = PaintingStyle.stroke;
 
@@ -47,6 +51,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       ..strokeWidth = 1.0;
 
     _clipPaint = Paint();
+    _backgroundBlockPaint = Paint()..style = PaintingStyle.fill;
   }
 
   late Paint _barPaint;
@@ -91,6 +96,11 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       );
 
       clipToBorder(canvasWrapper, holder);
+    }
+
+    // 首先繪製背景區塊（在所有其他元素之前）
+    for (final backgroundBlock in data.backgroundBlocks) {
+      drawBackgroundBlock(canvasWrapper, backgroundBlock, holder);
     }
 
     for (final betweenBarsData in data.betweenBarsData) {
@@ -191,6 +201,36 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
         holder,
       );
     }
+  }
+
+    /// 繪製背景區塊
+  @visibleForTesting
+  void drawBackgroundBlock(
+    CanvasWrapper canvasWrapper,
+    BackgroundBlockData blockData,
+    PaintHolder<LineChartData> holder,
+  ) {
+    if (!blockData.show) {
+      return;
+    }
+
+    final viewSize = canvasWrapper.size;
+    final data = holder.data;
+
+    final leftX = getPixelX(blockData.startX, viewSize, holder);
+    final rightX = getPixelX(blockData.endX, viewSize, holder);
+    final topY = 0.0;
+    final bottomY = viewSize.height;
+
+    final rect = Rect.fromLTRB(leftX, topY, rightX, bottomY);
+
+    _backgroundBlockPaint.setColorOrGradient(
+      blockData.color,
+      blockData.gradient,
+      rect,
+    );
+
+    canvasWrapper.drawRect(rect, _backgroundBlockPaint);
   }
 
   @visibleForTesting
@@ -1341,6 +1381,18 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       return null;
     }
 
+    // 檢查是否觸碰到背景區塊
+    final touchedBackgroundBlock = _getTouchedBackgroundBlock(
+      localPosition,
+      viewSize,
+      holder,
+    );
+
+    if (touchedBackgroundBlock != null) {
+      // 如果觸碰到背景區塊且有 tooltip，顯示背景區塊的 tooltip
+      // 這裡需要在 LineTouchResponse 中處理
+    }
+
     /// it holds list of nearest touched spots of each line
     /// and we use it to draw touch stuff on them
     final touchedSpots = <TouchLineBarSpot>[];
@@ -1366,6 +1418,42 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     touchedSpots.sort((a, b) => a.distance.compareTo(b.distance));
 
     return touchedSpots.isEmpty ? null : touchedSpots;
+  }
+
+    /// 取得被觸碰的背景區塊
+  TouchedBackgroundBlock? _getTouchedBackgroundBlock(
+    Offset localPosition,
+    Size viewSize,
+    PaintHolder<LineChartData> holder,
+  ) {
+    final data = holder.data;
+    final touchX = getChartCoordinateX(localPosition.dx, viewSize, holder);
+
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final block = data.backgroundBlocks[i];
+      if (!block.show) continue;
+
+      if (touchX >= block.startX && touchX <= block.endX) {
+        return TouchedBackgroundBlock(
+          blockData: block,
+          blockIndex: i,
+          touchX: touchX,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// 獲取圖表座標系統中的 X 值
+  double getChartCoordinateX(double pixelX, Size viewSize, PaintHolder<LineChartData> holder) {
+    final data = holder.data;
+    final chartUsableSize = holder.getChartUsableSize(viewSize);
+    
+    final deltaX = data.maxX - data.minX;
+    final pixelPerX = chartUsableSize.width / deltaX;
+    
+    return (pixelX / pixelPerX) + data.minX;
   }
 
   /// find the nearest spot base on the touched offset
