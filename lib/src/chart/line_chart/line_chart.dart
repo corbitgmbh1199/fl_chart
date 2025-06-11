@@ -59,15 +59,6 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
 
   final _lineChartHelper = LineChartHelper();
 
-  Timer? _tooltipDebounceTimer;
-  TouchedBackgroundBlock? _pendingBackgroundBlock;
-
-  @override
-  void dispose() {
-    _tooltipDebounceTimer?.cancel();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final showingData = _getData();
@@ -182,33 +173,24 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       return;
     }
 
-    // 處理背景區塊觸碰（使用防抖動）
+    // 優先處理背景區塊觸碰 - 移除防抖動機制
     if (touchResponse?.touchedBackgroundBlock != null) {
       final newBlock = touchResponse!.touchedBackgroundBlock!;
-      
-      // 如果是同一個區塊，立即更新
-      if (_touchedBackgroundBlock?.blockIndex == newBlock.blockIndex) {
-        return; // 避免不必要的重繪
-      }
 
-      // 使用防抖動機制
-      _tooltipDebounceTimer?.cancel();
-      _tooltipDebounceTimer = Timer(const Duration(milliseconds: 50), () {
-        if (mounted) {
-          setState(() {
-            _touchedBackgroundBlock = newBlock;
-            _showingTouchedTooltips.clear();
-            _showingTouchedIndicators.clear();
-          });
-        }
-      });
+      // 只有當背景區塊真正改變時才更新狀態
+      if (_touchedBackgroundBlock?.blockIndex != newBlock.blockIndex) {
+        setState(() {
+          _touchedBackgroundBlock = newBlock;
+          _showingTouchedTooltips.clear();
+          _showingTouchedIndicators.clear();
+        });
+      }
       return;
     }
 
     // 處理線條觸碰
-    if (touchResponse?.lineBarSpots != null && 
+    if (touchResponse?.lineBarSpots != null &&
         touchResponse!.lineBarSpots!.isNotEmpty) {
-      _tooltipDebounceTimer?.cancel();
       setState(() {
         _touchedBackgroundBlock = null;
 
@@ -229,10 +211,9 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       return;
     }
 
-    // 清除所有狀態
-    _tooltipDebounceTimer?.cancel();
-    if (_touchedBackgroundBlock != null || 
-        _showingTouchedTooltips.isNotEmpty || 
+    // 只有在沒有任何觸碰時才清除狀態
+    if (_touchedBackgroundBlock != null ||
+        _showingTouchedTooltips.isNotEmpty ||
         _showingTouchedIndicators.isNotEmpty) {
       setState(() {
         _showingTouchedTooltips.clear();
@@ -359,9 +340,10 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BackgroundBlockTooltipPainter oldDelegate) {
-    // 只有當重要屬性改變時才重繪
+    // 只有當重要屬性改變時才重繪，忽略 touchX 的微小變化
     return touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex ||
-        touchedBlock.blockData != oldDelegate.touchedBlock.blockData ||
+        !identical(
+            touchedBlock.blockData, oldDelegate.touchedBlock.blockData) ||
         chartData != oldDelegate.chartData ||
         chartVirtualRect != oldDelegate.chartVirtualRect;
   }

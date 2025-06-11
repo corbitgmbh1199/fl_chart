@@ -1573,18 +1573,17 @@ class TouchedBackgroundBlock with EquatableMixin {
   final double touchX;
 
   @override
-  List<Object?> get props => [blockData, blockIndex, touchX];
+  List<Object?> get props => [blockIndex]; // 只比較 blockIndex，忽略 touchX 的變化
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! TouchedBackgroundBlock) return false;
     
-    // 只比較重要的屬性，忽略 touchX 的微小變化
-    return blockIndex == other.blockIndex && 
-           blockData == other.blockData;
+    // 只比較區塊索引，避免因為 touchX 微小變化造成閃爍
+    return blockIndex == other.blockIndex;
   }
 
   @override
-  int get hashCode => Object.hash(blockData, blockIndex);
+  int get hashCode => blockIndex.hashCode;
 }
