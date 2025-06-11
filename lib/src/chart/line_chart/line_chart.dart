@@ -59,8 +59,25 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
 
   final _lineChartHelper = LineChartHelper();
 
+  // 新增除錯變數
+  static const bool _enableDebugLogs = true; // 開發時設為 true，發布時設為 false
+  int _touchEventCounter = 0;
+  int? _lastTouchedBlockIndex;
+
+  void _debugLog(String message) {
+    if (_enableDebugLogs) {
+      print('[LineChart Debug] $message');
+    }
+  }
+
+  int _buildCounter = 0;
+
   @override
   Widget build(BuildContext context) {
+    _buildCounter++;
+    _debugLog('Widget 重建 #$_buildCounter');
+    _debugLog('目前背景區塊: ${_touchedBackgroundBlock?.blockIndex}');
+    
     final showingData = _getData();
 
     return AxisChartScaffoldWidget(
@@ -89,8 +106,11 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
   Widget _buildBackgroundBlockTooltip(BuildContext context, Rect? chartVirtualRect) {
     final block = _touchedBackgroundBlock!;
     final tooltipData = block.blockData.tooltipData!;
-    
+
+    _debugLog('建構背景區塊 tooltip: 區塊 ${block.blockIndex}');
+
     if (tooltipData.text.isEmpty) {
+      _debugLog('Tooltip 文字為空，返回 SizedBox.shrink()');
       return const SizedBox.shrink();
     }
 
@@ -154,6 +174,7 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
     return newData;
   }
 
+  // 修正 _handleBuiltInTouch 方法，確保 spots tooltip 優先顯示
   void _handleBuiltInTouch(
     FlTouchEvent event,
     LineTouchResponse? touchResponse,
@@ -161,38 +182,35 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
     if (!mounted) {
       return;
     }
+
+    _touchEventCounter++;
+    _debugLog('=== 觸碰事件 #$_touchEventCounter ===');
+    _debugLog('事件類型: ${event.runtimeType}');
+    _debugLog('是否為互動事件: ${event.isInterestedForInteractions}');
+    _debugLog('觸碰線條數量: ${touchResponse?.lineBarSpots?.length ?? 0}');
+    _debugLog('觸碰背景區塊: ${touchResponse?.touchedBackgroundBlock?.blockIndex}');
+    _debugLog('目前背景區塊: ${_touchedBackgroundBlock?.blockIndex}');
+
     _providedTouchCallback?.call(event, touchResponse);
 
-    // 修改條件邏輯，避免不必要的清除
     if (!event.isInterestedForInteractions) {
+      _debugLog('清除所有狀態（非互動事件）');
       setState(() {
         _showingTouchedTooltips.clear();
         _showingTouchedIndicators.clear();
         _touchedBackgroundBlock = null;
+        _lastTouchedBlockIndex = null;
       });
       return;
     }
 
-    // 優先處理背景區塊觸碰 - 移除防抖動機制
-    if (touchResponse?.touchedBackgroundBlock != null) {
-      final newBlock = touchResponse!.touchedBackgroundBlock!;
-
-      // 只有當背景區塊真正改變時才更新狀態
-      if (_touchedBackgroundBlock?.blockIndex != newBlock.blockIndex) {
-        setState(() {
-          _touchedBackgroundBlock = newBlock;
-          _showingTouchedTooltips.clear();
-          _showingTouchedIndicators.clear();
-        });
-      }
-      return;
-    }
-
-    // 處理線條觸碰
+    // 優先處理線條觸碰（spots tooltip 優先）
     if (touchResponse?.lineBarSpots != null &&
         touchResponse!.lineBarSpots!.isNotEmpty) {
+      _debugLog('觸碰到線條，優先顯示線條 tooltip');
       setState(() {
         _touchedBackgroundBlock = null;
+        _lastTouchedBlockIndex = null;
 
         final sortedLineSpots = List.of(touchResponse.lineBarSpots!)
           ..sort((spot1, spot2) => spot2.y.compareTo(spot1.y));
@@ -211,7 +229,28 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       return;
     }
 
-    // 只有在沒有任何觸碰時才清除狀態
+    // 只有在沒有線條觸碰時才處理背景區塊觸碰
+    final newBackgroundBlock = touchResponse?.touchedBackgroundBlock;
+    if (newBackgroundBlock != null) {
+      final newBlockIndex = newBackgroundBlock.blockIndex;
+      _debugLog('觸碰到背景區塊: $newBlockIndex（沒有線條觸碰）');
+
+      if (_lastTouchedBlockIndex != newBlockIndex) {
+        _debugLog('更新背景區塊狀態 ($newBlockIndex)');
+        setState(() {
+          _touchedBackgroundBlock = newBackgroundBlock;
+          _showingTouchedTooltips.clear();
+          _showingTouchedIndicators.clear();
+          _lastTouchedBlockIndex = newBlockIndex;
+        });
+      } else {
+        _debugLog('同樣的背景區塊，跳過狀態更新');
+      }
+      return;
+    }
+
+    // 清除所有狀態
+    _debugLog('沒有觸碰到任何物件，清除狀態');
     if (_touchedBackgroundBlock != null ||
         _showingTouchedTooltips.isNotEmpty ||
         _showingTouchedIndicators.isNotEmpty) {
@@ -219,6 +258,7 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
         _showingTouchedTooltips.clear();
         _showingTouchedIndicators.clear();
         _touchedBackgroundBlock = null;
+        _lastTouchedBlockIndex = null;
       });
     }
   }
@@ -245,11 +285,20 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
   final LineChartData chartData;
   final Rect? chartVirtualRect;
 
+  static int _paintCounter = 0;
+
   @override
   void paint(Canvas canvas, Size size) {
+    _paintCounter++;
+    print(
+        '[Tooltip Painter] 繪製 #$_paintCounter - 區塊 ${touchedBlock.blockIndex}');
+    
     final tooltipData = touchedBlock.blockData.tooltipData!;
 
-    if (tooltipData.text.isEmpty) return;
+    if (tooltipData.text.isEmpty) {
+      print('[Tooltip Painter] 文字為空，跳過繪製');
+      return;
+    }
 
     // 計算 tooltip 位置 - 使用區塊中心而不是觸碰點
     final blockCenterX =
@@ -258,10 +307,15 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     final deltaX = chartData.maxX - chartData.minX;
 
     // 避免除以零的情況
-    if (deltaX == 0) return;
+    if (deltaX == 0) {
+      print('[Tooltip Painter] deltaX 為 0，跳過繪製');
+      return;
+    }
 
     final pixelPerX = chartUsableSize.width / deltaX;
     final tooltipX = (blockCenterX - chartData.minX) * pixelPerX;
+
+    print('[Tooltip Painter] 位置計算: blockCenterX=$blockCenterX, tooltipX=$tooltipX');
 
     // 建立文字繪製器並使用 cascade 操作符
     final textPainter = TextPainter(
@@ -340,11 +394,16 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BackgroundBlockTooltipPainter oldDelegate) {
-    // 只有當重要屬性改變時才重繪，忽略 touchX 的微小變化
-    return touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex ||
-        !identical(
-            touchedBlock.blockData, oldDelegate.touchedBlock.blockData) ||
+    final shouldRepaint = touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex ||
+        !identical(touchedBlock.blockData, oldDelegate.touchedBlock.blockData) ||
         chartData != oldDelegate.chartData ||
         chartVirtualRect != oldDelegate.chartVirtualRect;
+    
+    print('[Tooltip Painter] shouldRepaint: $shouldRepaint');
+    print('  - 區塊索引改變: ${touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex}');
+    print('  - 區塊資料改變: ${!identical(touchedBlock.blockData, oldDelegate.touchedBlock.blockData)}');
+    print('  - 圖表資料改變: ${chartData != oldDelegate.chartData}');
+    
+    return shouldRepaint;
   }
 }

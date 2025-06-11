@@ -1476,6 +1476,8 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
   }
 
   /// find the nearest spot base on the touched offset
+  // 修正 getNearestTouchedSpot 方法
+  /// 根據觸碰偏移量尋找最近的點
   @visibleForTesting
   TouchLineBarSpot? getNearestTouchedSpot(
     Size viewSize,
@@ -1489,11 +1491,14 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       return null;
     }
 
-    /// Find the nearest spot (based on distanceCalculator)
-    final sortedSpots = <FlSpot>[];
-    double? smallestDistance;
-    for (final spot in barData.spots) {
+    /// 根據 distanceCalculator 尋找最近的點
+    TouchLineBarSpot? nearestTouchedSpot;
+    double? nearestDistance;
+
+    for (var i = 0; i < barData.spots.length; i++) {
+      final spot = barData.spots[i];
       if (spot.isNull()) continue;
+
       final distance = data.lineTouchData.distanceCalculator(
         touchedPoint,
         Offset(
@@ -1503,29 +1508,22 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       );
 
       if (distance <= data.lineTouchData.touchSpotThreshold) {
-        smallestDistance ??= distance;
+        if (nearestDistance == null || distance < nearestDistance) {
+          nearestDistance = distance;
 
-        if (distance < smallestDistance) {
-          sortedSpots.insert(0, spot);
-          smallestDistance = distance;
-        } else {
-          sortedSpots.add(spot);
+          // TouchLineBarSpot 建構函式需要 4 個參數：bar, barIndex, spot, distance
+          nearestTouchedSpot = TouchLineBarSpot(
+            barData, // LineChartBarData: super.bar
+            barDataPosition, // int: super.barIndex
+            spot, // FlSpot: super.spot
+            distance, // double: this.distance
+          );
         }
       }
     }
 
-    if (sortedSpots.isNotEmpty) {
-      return TouchLineBarSpot(
-        barData,
-        barDataPosition,
-        sortedSpots.first,
-        smallestDistance!,
-      );
-    } else {
-      return null;
-    }
+    return nearestTouchedSpot;
   }
-
   // Get the height of the dot for the given showingTooltipSpots
   double _getDotHeight({
     required Size viewSize,

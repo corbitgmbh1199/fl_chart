@@ -139,10 +139,14 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
   //   );
   // }
 
+  // 修正 getResponseAtLocation 方法，讓 spots 優先於背景區塊
   @override
   LineTouchResponse getResponseAtLocation(Offset localPosition) {
+    print('[Renderer] 觸碰檢測: 位置 $localPosition');
+
     final data = targetData;
     if (!data.lineTouchData.enabled) {
+      print('[Renderer] 觸碰已停用');
       return LineTouchResponse(
         touchLocation: localPosition,
         touchChartCoordinate: localPosition,
@@ -152,19 +156,48 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
     final size = mockTestSize ?? this.size;
     final chartViewSize = paintHolder.getChartUsableSize(size);
 
-    // 首先檢查背景區塊
-    final touchedBackgroundBlock = _getTouchedBackgroundBlock(
-      localPosition,
-      chartViewSize,
-      paintHolder,
-    );
+    print('[Renderer] 圖表尺寸: $chartViewSize');
+    print('[Renderer] 背景區塊數量: ${data.backgroundBlocks.length}');
 
-    // 檢查線條觸碰
-    final touchedSpots = painter.handleTouch(
-      localPosition,
-      size,
-      paintHolder,
-    );
+    // 優先檢查線條觸碰（spots 的 tooltip 優先）
+    List<TouchLineBarSpot>? touchedSpots =
+        painter.handleTouch(localPosition, size, paintHolder);
+    print('[Renderer] 線條觸碰點數量: ${touchedSpots?.length ?? 0}');
+
+    // 只有在沒有觸碰到線條時才檢查背景區塊
+    TouchedBackgroundBlock? touchedBackgroundBlock;
+    if (touchedSpots == null || touchedSpots.isEmpty) {
+      print('[Renderer] 沒有線條觸碰，檢查背景區塊');
+
+      if (localPosition.dx >= 0 &&
+          localPosition.dx <= chartViewSize.width &&
+          localPosition.dy >= 0 &&
+          localPosition.dy <= chartViewSize.height) {
+        final touchX =
+            _getChartCoordinateX(localPosition.dx, chartViewSize, paintHolder);
+        print('[Renderer] 觸碰 X 座標: $touchX');
+
+        for (var i = 0; i < data.backgroundBlocks.length; i++) {
+          final block = data.backgroundBlocks[i];
+          print(
+              '[Renderer] 檢查區塊 $i: startX=${block.startX}, endX=${block.endX}, show=${block.show}');
+
+          if (!block.show || block.tooltipData == null) continue;
+
+          if (touchX >= block.startX && touchX <= block.endX) {
+            touchedBackgroundBlock = TouchedBackgroundBlock(
+              blockData: block,
+              blockIndex: i,
+              touchX: touchX,
+            );
+            print('[Renderer] 找到觸碰的背景區塊: $i');
+            break;
+          }
+        }
+      }
+    } else {
+      print('[Renderer] 已觸碰線條，跳過背景區塊檢測');
+    }
 
     return LineTouchResponse(
       touchLocation: localPosition,
