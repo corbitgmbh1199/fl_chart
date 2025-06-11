@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fl_chart/src/chart/base/axis_chart/axis_chart_scaffold_widget.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/scale_axis.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/transformation_config.dart';
@@ -56,6 +58,15 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
   TouchedBackgroundBlock? _touchedBackgroundBlock;
 
   final _lineChartHelper = LineChartHelper();
+
+  Timer? _tooltipDebounceTimer;
+  TouchedBackgroundBlock? _pendingBackgroundBlock;
+
+  @override
+  void dispose() {
+    _tooltipDebounceTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -161,9 +172,8 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
     }
     _providedTouchCallback?.call(event, touchResponse);
 
-    if (!event.isInterestedForInteractions ||
-        touchResponse?.lineBarSpots == null ||
-        touchResponse!.lineBarSpots!.isEmpty) {
+    // 修改條件邏輯，避免不必要的清除
+    if (!event.isInterestedForInteractions) {
       setState(() {
         _showingTouchedTooltips.clear();
         _showingTouchedIndicators.clear();
@@ -172,44 +182,64 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       return;
     }
 
-    // 處理背景區塊觸碰
-    if (touchResponse.touchedBackgroundBlock != null) {
-      setState(() {
-        _touchedBackgroundBlock = touchResponse.touchedBackgroundBlock;
-        _showingTouchedTooltips.clear();
-        _showingTouchedIndicators.clear();
+    // 處理背景區塊觸碰（使用防抖動）
+    if (touchResponse?.touchedBackgroundBlock != null) {
+      final newBlock = touchResponse!.touchedBackgroundBlock!;
+      
+      // 如果是同一個區塊，立即更新
+      if (_touchedBackgroundBlock?.blockIndex == newBlock.blockIndex) {
+        return; // 避免不必要的重繪
+      }
+
+      // 使用防抖動機制
+      _tooltipDebounceTimer?.cancel();
+      _tooltipDebounceTimer = Timer(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          setState(() {
+            _touchedBackgroundBlock = newBlock;
+            _showingTouchedTooltips.clear();
+            _showingTouchedIndicators.clear();
+          });
+        }
       });
       return;
     }
 
     // 處理線條觸碰
-    if (touchResponse.lineBarSpots == null ||
-        touchResponse.lineBarSpots!.isEmpty) {
+    if (touchResponse?.lineBarSpots != null && 
+        touchResponse!.lineBarSpots!.isNotEmpty) {
+      _tooltipDebounceTimer?.cancel();
       setState(() {
-        _showingTouchedTooltips.clear();
+        _touchedBackgroundBlock = null;
+
+        final sortedLineSpots = List.of(touchResponse.lineBarSpots!)
+          ..sort((spot1, spot2) => spot2.y.compareTo(spot1.y));
+
         _showingTouchedIndicators.clear();
-        _touchedBackgroundBlock = null; // 新增這一行
+        for (var i = 0; i < touchResponse.lineBarSpots!.length; i++) {
+          final touchedBarSpot = touchResponse.lineBarSpots![i];
+          final barPos = touchedBarSpot.barIndex;
+          _showingTouchedIndicators[barPos] = [touchedBarSpot.spotIndex];
+        }
+
+        _showingTouchedTooltips
+          ..clear()
+          ..add(ShowingTooltipIndicators(sortedLineSpots));
       });
       return;
     }
 
-    setState(() {
-      _touchedBackgroundBlock = null;
-
-      final sortedLineSpots = List.of(touchResponse.lineBarSpots!)
-        ..sort((spot1, spot2) => spot2.y.compareTo(spot1.y));
-
-      _showingTouchedIndicators.clear();
-      for (var i = 0; i < touchResponse.lineBarSpots!.length; i++) {
-        final touchedBarSpot = touchResponse.lineBarSpots![i];
-        final barPos = touchedBarSpot.barIndex;
-        _showingTouchedIndicators[barPos] = [touchedBarSpot.spotIndex];
-      }
-
-      _showingTouchedTooltips
-        ..clear()
-        ..add(ShowingTooltipIndicators(sortedLineSpots));
-    });
+    // 清除所有狀態
+    _tooltipDebounceTimer?.cancel();
+    if (_touchedBackgroundBlock != null || 
+        _showingTouchedTooltips.isNotEmpty || 
+        _showingTouchedIndicators.isNotEmpty) {
+      setState(() {
+        _showingTouchedTooltips.clear();
+        _showingTouchedIndicators.clear();
+        _touchedBackgroundBlock = null;
+      });
+    }
   }
 
   @override
@@ -223,7 +253,6 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
   }
 }
 
-/// 自訂繪製器用於繪製背景區塊的 tooltip
 class _BackgroundBlockTooltipPainter extends CustomPainter {
   _BackgroundBlockTooltipPainter({
     required this.touchedBlock,
@@ -238,15 +267,22 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final tooltipData = touchedBlock.blockData.tooltipData!;
-    
-    // 計算 tooltip 位置
-    final blockCenterX = (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
+
+    if (tooltipData.text.isEmpty) return;
+
+    // 計算 tooltip 位置 - 使用區塊中心而不是觸碰點
+    final blockCenterX =
+        (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
     final chartUsableSize = _getChartUsableSize(size);
     final deltaX = chartData.maxX - chartData.minX;
+
+    // 避免除以零的情況
+    if (deltaX == 0) return;
+
     final pixelPerX = chartUsableSize.width / deltaX;
     final tooltipX = (blockCenterX - chartData.minX) * pixelPerX;
-    
-    // 建立文字繪製器
+
+    // 建立文字繪製器並使用 cascade 操作符
     final textPainter = TextPainter(
       text: TextSpan(
         text: tooltipData.text,
@@ -258,17 +294,14 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     // 計算 tooltip 背景尺寸
     final tooltipWidth = textPainter.width + tooltipData.padding.horizontal;
     final tooltipHeight = textPainter.height + tooltipData.padding.vertical;
-    
-    // 計算 tooltip 位置（在圖表頂部）
+
+    // 計算 tooltip 位置（在圖表頂部），確保位置穩定
     var tooltipLeft = tooltipX - tooltipWidth / 2;
-    const tooltipTop = 20.0; // 距離頂部的距離
-    
+    const tooltipTop = 20.0;
+
     // 確保 tooltip 不會超出邊界
-    if (tooltipLeft < 0) {
-      tooltipLeft = 0;
-    } else if (tooltipLeft + tooltipWidth > chartUsableSize.width) {
-      tooltipLeft = chartUsableSize.width - tooltipWidth;
-    }
+    tooltipLeft = tooltipLeft.clamp(0.0,
+        (chartUsableSize.width - tooltipWidth).clamp(0.0, double.infinity));
 
     // 繪製 tooltip 背景
     final tooltipRect = Rect.fromLTWH(
@@ -281,6 +314,22 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     final backgroundPaint = Paint()
       ..color = tooltipData.backgroundColor
       ..style = PaintingStyle.fill;
+
+    // 繪製背景陰影（可選）
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        tooltipRect.translate(2, 2), // 陰影偏移
+        topLeft: tooltipData.borderRadius.topLeft,
+        topRight: tooltipData.borderRadius.topRight,
+        bottomLeft: tooltipData.borderRadius.bottomLeft,
+        bottomRight: tooltipData.borderRadius.bottomRight,
+      ),
+      shadowPaint,
+    );
 
     canvas.drawRRect(
       RRect.fromRectAndCorners(
@@ -310,8 +359,10 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BackgroundBlockTooltipPainter oldDelegate) {
-    return touchedBlock != oldDelegate.touchedBlock ||
-           chartData != oldDelegate.chartData ||
-           chartVirtualRect != oldDelegate.chartVirtualRect;
+    // 只有當重要屬性改變時才重繪
+    return touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex ||
+        touchedBlock.blockData != oldDelegate.touchedBlock.blockData ||
+        chartData != oldDelegate.chartData ||
+        chartVirtualRect != oldDelegate.chartVirtualRect;
   }
 }

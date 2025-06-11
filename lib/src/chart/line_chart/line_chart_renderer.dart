@@ -183,10 +183,14 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
     final data = holder.data;
     final touchX = _getChartCoordinateX(localPosition.dx, viewSize, holder);
 
+    // 檢查所有背景區塊，找出被觸碰的區塊
     for (var i = 0; i < data.backgroundBlocks.length; i++) {
       final block = data.backgroundBlocks[i];
+
+      // 確保區塊是顯示的且有 tooltip 資料
       if (!block.show || block.tooltipData == null) continue;
 
+      // 檢查觸碰點是否在背景區塊的 X 範圍內（整個區塊都可觸碰）
       if (touchX >= block.startX && touchX <= block.endX) {
         return TouchedBackgroundBlock(
           blockData: block,
