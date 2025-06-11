@@ -111,6 +111,8 @@ class LineChartData extends AxisChartData with EquatableMixin {
             lerpLineChartBarDataList(a.lineBarsData, b.lineBarsData, t)!,
         betweenBarsData:
             lerpBetweenBarsDataList(a.betweenBarsData, b.betweenBarsData, t)!,
+        backgroundBlocks: _lerpBackgroundBlockDataList(
+            a.backgroundBlocks, b.backgroundBlocks, t),
         lineTouchData: b.lineTouchData,
         showingTooltipIndicators: b.showingTooltipIndicators,
         rotationQuarterTurns: b.rotationQuarterTurns,
@@ -118,6 +120,22 @@ class LineChartData extends AxisChartData with EquatableMixin {
     } else {
       throw Exception('Illegal State');
     }
+  }
+
+  /// 背景區塊清單的線性插值函式
+  static List<BackgroundBlockData> _lerpBackgroundBlockDataList(
+    List<BackgroundBlockData> a,
+    List<BackgroundBlockData> b,
+    double t,
+  ) {
+    if (a.length != b.length) {
+      return b; // 如果長度不同，直接回傳目標清單
+    }
+
+    return List.generate(
+      b.length,
+      (index) => BackgroundBlockData.lerp(a[index], b[index], t),
+    );
   }
 
   /// Copies current [LineChartData] to a new [LineChartData],

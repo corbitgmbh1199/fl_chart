@@ -192,6 +192,9 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       }
       tooltipSpots = ShowingTooltipIndicators(barSpots);
 
+      // 最後繪製背景區塊的 tooltip（在所有其他元素之後）
+      drawBackgroundBlockTooltips(canvasWrapper, data, holder);
+
       drawTouchTooltip(
         context,
         canvasWrapper,
@@ -203,7 +206,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     }
   }
 
-    /// 繪製背景區塊
+  /// 繪製背景區塊
   @visibleForTesting
   void drawBackgroundBlock(
     CanvasWrapper canvasWrapper,
@@ -231,6 +234,22 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     );
 
     canvasWrapper.drawRect(rect, _backgroundBlockPaint);
+  }
+
+  /// 繪製背景區塊的 tooltip
+  @visibleForTesting
+  void drawBackgroundBlockTooltips(
+    CanvasWrapper canvasWrapper,
+    LineChartData data,
+    PaintHolder<LineChartData> holder,
+  ) {
+    if (!data.lineTouchData.enabled) {
+      return;
+    }
+
+    // 檢查是否有被觸碰的背景區塊需要顯示 tooltip
+    // 這個資訊會通過 LineChart 的狀態管理傳遞
+    // 暫時先不實作繪製邏輯，讓 Widget 層處理
   }
 
   @visibleForTesting

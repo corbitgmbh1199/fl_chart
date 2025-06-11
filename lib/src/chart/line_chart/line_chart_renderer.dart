@@ -121,21 +121,93 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
     canvas.restore();
   }
 
+  // @override
+  // LineTouchResponse getResponseAtLocation(Offset localPosition) {
+  //   final chartSize = mockTestSize ?? size;
+  //   return LineTouchResponse(
+  //     touchLocation: localPosition,
+  //     touchChartCoordinate: painter.getChartCoordinateFromPixel(
+  //       localPosition,
+  //       chartSize,
+  //       paintHolder,
+  //     ),
+  //     lineBarSpots: painter.handleTouch(
+  //       localPosition,
+  //       chartSize,
+  //       paintHolder,
+  //     ),
+  //   );
+  // }
+
   @override
   LineTouchResponse getResponseAtLocation(Offset localPosition) {
-    final chartSize = mockTestSize ?? size;
+    final data = targetData;
+    if (!data.lineTouchData.enabled) {
+      return LineTouchResponse(
+        touchLocation: localPosition,
+        touchChartCoordinate: localPosition,
+      );
+    }
+
+    final size = mockTestSize ?? this.size;
+    final chartViewSize = paintHolder.getChartUsableSize(size);
+
+    // 首先檢查背景區塊
+    final touchedBackgroundBlock = _getTouchedBackgroundBlock(
+      localPosition,
+      chartViewSize,
+      paintHolder,
+    );
+
+    // 檢查線條觸碰
+    final touchedSpots = painter.handleTouch(
+      localPosition,
+      size,
+      paintHolder,
+    );
+
     return LineTouchResponse(
       touchLocation: localPosition,
-      touchChartCoordinate: painter.getChartCoordinateFromPixel(
-        localPosition,
-        chartSize,
-        paintHolder,
-      ),
-      lineBarSpots: painter.handleTouch(
-        localPosition,
-        chartSize,
-        paintHolder,
-      ),
+      touchChartCoordinate: localPosition,
+      lineBarSpots: touchedSpots,
+      touchedBackgroundBlock: touchedBackgroundBlock,
     );
+  }
+
+  /// 取得被觸碰的背景區塊
+  TouchedBackgroundBlock? _getTouchedBackgroundBlock(
+    Offset localPosition,
+    Size viewSize,
+    PaintHolder<LineChartData> holder,
+  ) {
+    final data = holder.data;
+    final touchX = _getChartCoordinateX(localPosition.dx, viewSize, holder);
+
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final block = data.backgroundBlocks[i];
+      if (!block.show || block.tooltipData == null) continue;
+
+      if (touchX >= block.startX && touchX <= block.endX) {
+        return TouchedBackgroundBlock(
+          blockData: block,
+          blockIndex: i,
+          touchX: touchX,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// 獲取圖表座標系統中的 X 值
+  double _getChartCoordinateX(
+      double pixelX, Size viewSize, PaintHolder<LineChartData> holder) {
+    final data = holder.data;
+    final chartUsableSize = holder.getChartUsableSize(viewSize);
+
+    final deltaX = data.maxX - data.minX;
+    final pixelPerX = chartUsableSize.width / deltaX;
+
+    return (pixelX / pixelPerX) + data.minX;
   }
 }
