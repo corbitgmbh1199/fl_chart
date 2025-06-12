@@ -274,6 +274,8 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
   }
 }
 
+// 修正 _BackgroundBlockTooltipPainter 類別
+
 class _BackgroundBlockTooltipPainter extends CustomPainter {
   _BackgroundBlockTooltipPainter({
     required this.touchedBlock,
@@ -290,8 +292,7 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _paintCounter++;
-    print(
-        '[Tooltip Painter] 繪製 #$_paintCounter - 區塊 ${touchedBlock.blockIndex}');
+    print('[Tooltip Painter] 繪製 #$_paintCounter - 區塊 ${touchedBlock.blockIndex}');
     
     final tooltipData = touchedBlock.blockData.tooltipData!;
 
@@ -300,9 +301,10 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
       return;
     }
 
-    // 計算 tooltip 位置 - 使用區塊中心而不是觸碰點
-    final blockCenterX =
-        (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
+    // 計算 tooltip 位置 - 考慮變換矩陣
+    final blockCenterX = (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
+    
+    // 取得實際的圖表可用尺寸
     final chartUsableSize = _getChartUsableSize(size);
     final deltaX = chartData.maxX - chartData.minX;
 
@@ -312,12 +314,28 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
       return;
     }
 
-    final pixelPerX = chartUsableSize.width / deltaX;
-    final tooltipX = (blockCenterX - chartData.minX) * pixelPerX;
+    // 考慮變換後的座標計算
+    double tooltipX;
+    if (chartVirtualRect != null) {
+      // 在縮放模式下，需要考慮虛擬矩形的變換
+      final virtualWidth = chartVirtualRect!.width;
+      final virtualLeft = chartVirtualRect!.left;
+      
+      // 計算在虛擬座標系統中的位置
+      final normalizedX = (blockCenterX - chartData.minX) / deltaX;
+      tooltipX = virtualLeft + (normalizedX * virtualWidth);
+      
+      print('[Tooltip Painter] 縮放模式 - virtualRect: $chartVirtualRect');
+      print('[Tooltip Painter] normalizedX: $normalizedX, tooltipX: $tooltipX');
+    } else {
+      // 正常模式下的計算
+      final pixelPerX = chartUsableSize.width / deltaX;
+      tooltipX = (blockCenterX - chartData.minX) * pixelPerX;
+    }
 
     print('[Tooltip Painter] 位置計算: blockCenterX=$blockCenterX, tooltipX=$tooltipX');
 
-    // 建立文字繪製器並使用 cascade 操作符
+    // 建立文字繪製器
     final textPainter = TextPainter(
       text: TextSpan(
         text: tooltipData.text,
@@ -330,13 +348,16 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     final tooltipWidth = textPainter.width + tooltipData.padding.horizontal;
     final tooltipHeight = textPainter.height + tooltipData.padding.vertical;
 
-    // 計算 tooltip 位置（在圖表頂部），確保位置穩定
+    // 計算 tooltip 位置（在圖表頂部）
     var tooltipLeft = tooltipX - tooltipWidth / 2;
     const tooltipTop = 20.0;
 
     // 確保 tooltip 不會超出邊界
-    tooltipLeft = tooltipLeft.clamp(0.0,
-        (chartUsableSize.width - tooltipWidth).clamp(0.0, double.infinity));
+    final maxWidth = chartVirtualRect?.width ?? chartUsableSize.width;
+    final minLeft = chartVirtualRect?.left ?? 0.0;
+    final maxRight = (chartVirtualRect?.right ?? chartUsableSize.width) - tooltipWidth;
+    
+    tooltipLeft = tooltipLeft.clamp(minLeft, maxRight.clamp(minLeft, double.infinity));
 
     // 繪製 tooltip 背景
     final tooltipRect = Rect.fromLTWH(
@@ -350,7 +371,7 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
       ..color = tooltipData.backgroundColor
       ..style = PaintingStyle.fill;
 
-    // 繪製背景陰影（可選）
+    // 繪製背景陰影
     final shadowPaint = Paint()
       ..color = Colors.black.withOpacity(0.1)
       ..style = PaintingStyle.fill;
@@ -388,7 +409,7 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
   }
 
   Size _getChartUsableSize(Size size) {
-    // 簡化的計算，實際應該考慮 padding 和 margin
+    // 如果有虛擬矩形，使用實際的畫布尺寸
     return size;
   }
 
@@ -403,6 +424,7 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     print('  - 區塊索引改變: ${touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex}');
     print('  - 區塊資料改變: ${!identical(touchedBlock.blockData, oldDelegate.touchedBlock.blockData)}');
     print('  - 圖表資料改變: ${chartData != oldDelegate.chartData}');
+    print('  - 虛擬矩形改變: ${chartVirtualRect != oldDelegate.chartVirtualRect}');
     
     return shouldRepaint;
   }

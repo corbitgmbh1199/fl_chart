@@ -158,6 +158,7 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
 
     print('[Renderer] 圖表尺寸: $chartViewSize');
     print('[Renderer] 背景區塊數量: ${data.backgroundBlocks.length}');
+    print('[Renderer] 虛擬矩形: ${paintHolder.chartVirtualRect}');
 
     // 優先檢查線條觸碰（spots 的 tooltip 優先）
     List<TouchLineBarSpot>? touchedSpots =
@@ -169,32 +170,11 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
     if (touchedSpots == null || touchedSpots.isEmpty) {
       print('[Renderer] 沒有線條觸碰，檢查背景區塊');
 
-      if (localPosition.dx >= 0 &&
-          localPosition.dx <= chartViewSize.width &&
-          localPosition.dy >= 0 &&
-          localPosition.dy <= chartViewSize.height) {
-        final touchX =
-            _getChartCoordinateX(localPosition.dx, chartViewSize, paintHolder);
-        print('[Renderer] 觸碰 X 座標: $touchX');
-
-        for (var i = 0; i < data.backgroundBlocks.length; i++) {
-          final block = data.backgroundBlocks[i];
-          print(
-              '[Renderer] 檢查區塊 $i: startX=${block.startX}, endX=${block.endX}, show=${block.show}');
-
-          if (!block.show || block.tooltipData == null) continue;
-
-          if (touchX >= block.startX && touchX <= block.endX) {
-            touchedBackgroundBlock = TouchedBackgroundBlock(
-              blockData: block,
-              blockIndex: i,
-              touchX: touchX,
-            );
-            print('[Renderer] 找到觸碰的背景區塊: $i');
-            break;
-          }
-        }
-      }
+      touchedBackgroundBlock = _getTouchedBackgroundBlockWithTransform(
+        localPosition,
+        size,
+        paintHolder,
+      );
     } else {
       print('[Renderer] 已觸碰線條，跳過背景區塊檢測');
     }
@@ -207,6 +187,63 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
     );
   }
 
+  /// 考慮變換的背景區塊觸碰檢測
+  TouchedBackgroundBlock? _getTouchedBackgroundBlockWithTransform(
+    Offset localPosition,
+    Size size,
+    PaintHolder<LineChartData> holder,
+  ) {
+    final data = holder.data;
+
+    // 檢查觸碰位置是否在有效範圍內
+    if (localPosition.dx < 0 ||
+        localPosition.dy < 0 ||
+        localPosition.dx > size.width ||
+        localPosition.dy > size.height) {
+      print('[Renderer] 觸碰位置超出範圍');
+      return null;
+    }
+
+    // 計算圖表座標
+    double touchX;
+    if (holder.chartVirtualRect != null) {
+      // 縮放模式下的座標轉換
+      final virtualRect = holder.chartVirtualRect!;
+      final normalizedX =
+          (localPosition.dx - virtualRect.left) / virtualRect.width;
+      touchX = data.minX + (normalizedX * (data.maxX - data.minX));
+      print('[Renderer] 縮放模式座標轉換: normalizedX=$normalizedX, touchX=$touchX');
+    } else {
+      // 正常模式下的座標轉換
+      final chartViewSize = holder.getChartUsableSize(size);
+      final deltaX = data.maxX - data.minX;
+      final pixelPerX = chartViewSize.width / deltaX;
+      touchX = (localPosition.dx / pixelPerX) + data.minX;
+    }
+
+    print('[Renderer] 觸碰 X 座標: $touchX');
+
+    // 檢查背景區塊
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final block = data.backgroundBlocks[i];
+      print(
+          '[Renderer] 檢查區塊 $i: startX=${block.startX}, endX=${block.endX}, show=${block.show}');
+
+      if (!block.show || block.tooltipData == null) continue;
+
+      if (touchX >= block.startX && touchX <= block.endX) {
+        print('[Renderer] 找到觸碰的背景區塊: $i');
+        return TouchedBackgroundBlock(
+          blockData: block,
+          blockIndex: i,
+          touchX: touchX,
+        );
+      }
+    }
+
+    return null;
+  }
+  
   /// 取得被觸碰的背景區塊
   TouchedBackgroundBlock? _getTouchedBackgroundBlock(
     Offset localPosition,

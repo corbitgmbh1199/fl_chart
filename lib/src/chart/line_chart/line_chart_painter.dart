@@ -206,6 +206,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     }
   }
 
+  // 修正 drawBackgroundBlock 方法以支援變換
   /// 繪製背景區塊
   @visibleForTesting
   void drawBackgroundBlock(
@@ -220,12 +221,29 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     final viewSize = canvasWrapper.size;
     final data = holder.data;
 
+    // 考慮變換後的座標計算
     final leftX = getPixelX(blockData.startX, viewSize, holder);
     final rightX = getPixelX(blockData.endX, viewSize, holder);
-    final topY = 0.0;
-    final bottomY = viewSize.height;
+
+    // 如果有虛擬矩形，需要調整 Y 座標範圍
+    double topY, bottomY;
+    if (holder.chartVirtualRect != null) {
+      // 在縮放模式下，背景區塊應該覆蓋整個可見區域
+      topY = holder.chartVirtualRect!.top;
+      bottomY = holder.chartVirtualRect!.bottom;
+    } else {
+      // 正常模式下覆蓋整個圖表高度
+      topY = 0.0;
+      bottomY = viewSize.height;
+    }
 
     final rect = Rect.fromLTRB(leftX, topY, rightX, bottomY);
+
+    // 只有當矩形在可見範圍內時才繪製
+    final visibleRect = Offset.zero & viewSize;
+    if (!rect.overlaps(visibleRect)) {
+      return;
+    }
 
     _backgroundBlockPaint.setColorOrGradient(
       blockData.color,
@@ -235,7 +253,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
 
     canvasWrapper.drawRect(rect, _backgroundBlockPaint);
   }
-
+  
   /// 繪製背景區塊的 tooltip
   @visibleForTesting
   void drawBackgroundBlockTooltips(
