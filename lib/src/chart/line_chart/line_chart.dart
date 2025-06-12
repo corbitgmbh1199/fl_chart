@@ -229,7 +229,7 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
   }
 }
 
-// 修正 _BackgroundBlockTooltipPainter 以使用全域 tooltip 設定
+// 修正 _BackgroundBlockTooltipPainter 類別，使其像 touchTooltipData 一樣在整個圖表區域內顯示
 
 class _BackgroundBlockTooltipPainter extends CustomPainter {
   _BackgroundBlockTooltipPainter({
@@ -242,10 +242,8 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
   final LineChartData chartData;
   final Rect? chartVirtualRect;
 
-
   @override
   void paint(Canvas canvas, Size size) {
-
     // 使用全域的背景區塊 tooltip 設定
     final tooltipData = chartData.lineTouchData.backgroundBlockTooltipData;
 
@@ -293,39 +291,24 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     final tooltipWidth = maxWidth + tooltipData.tooltipPadding.horizontal;
     final tooltipHeight = totalHeight + tooltipData.tooltipPadding.vertical;
 
-    // 計算 tooltip 位置
-    final blockCenterX = (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
-    final chartUsableSize = _getChartUsableSize(size);
-    final deltaX = chartData.maxX - chartData.minX;
+    // 計算觸碰點在圖表中的像素位置（類似 touchTooltipData 的做法）
+    final blockCenterX =
+        (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
+    final touchPoint = Offset(
+      _getPixelX(blockCenterX, size),
+      size.height / 2, // 可以設定為圖表中央或其他位置
+    );
 
-    if (deltaX == 0) {
-      return;
-    }
+    // 動態取得對齊方式和偏移量
+    final alignment =
+        tooltipData.getTooltipAlignment?.call(touchedBlock, size) ??
+            tooltipData.tooltipHorizontalAlignment;
 
-    // 考慮變換後的座標計算
-    double tooltipCenterX;
-    if (chartVirtualRect != null) {
-      final virtualWidth = chartVirtualRect!.width;
-      final virtualLeft = chartVirtualRect!.left;
-      final normalizedX = (blockCenterX - chartData.minX) / deltaX;
-      tooltipCenterX = virtualLeft + (normalizedX * virtualWidth);
-    } else {
-      final pixelPerX = chartUsableSize.width / deltaX;
-      tooltipCenterX = (blockCenterX - chartData.minX) * pixelPerX;
-    }
+    final horizontalOffset =
+        tooltipData.getTooltipHorizontalOffset?.call(touchedBlock, size) ??
+            tooltipData.tooltipHorizontalOffset;
 
-    // 根據對齊方式計算 tooltip 左邊位置
-    double tooltipLeft;
-    switch (tooltipData.tooltipHorizontalAlignment) {
-      case FLHorizontalAlignment.left:
-        tooltipLeft = tooltipCenterX + tooltipData.tooltipHorizontalOffset;
-      case FLHorizontalAlignment.right:
-        tooltipLeft = tooltipCenterX - tooltipWidth + tooltipData.tooltipHorizontalOffset;
-      case FLHorizontalAlignment.center:
-        tooltipLeft = tooltipCenterX - tooltipWidth / 2 + tooltipData.tooltipHorizontalOffset;
-    }
-
-    // 計算 tooltip 頂部位置
+    // 計算 tooltip 位置（在整個圖表區域內，不受背景區塊限制）
     double tooltipTop;
     if (tooltipData.showOnTopOfTheChartBoxArea) {
       tooltipTop = -tooltipHeight - tooltipData.tooltipMargin;
@@ -333,10 +316,25 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
       tooltipTop = tooltipData.tooltipMargin;
     }
 
-    // 邊界檢查
+    // 根據對齊方式計算 tooltip 水平位置（相對於整個圖表寬度）
+    double tooltipLeft;
+    switch (alignment) {
+      case FLHorizontalAlignment.left:
+        tooltipLeft = touchPoint.dx + horizontalOffset;
+        break;
+      case FLHorizontalAlignment.right:
+        tooltipLeft = touchPoint.dx - tooltipWidth + horizontalOffset;
+        break;
+      case FLHorizontalAlignment.center:
+      default:
+        tooltipLeft = touchPoint.dx - tooltipWidth / 2 + horizontalOffset;
+        break;
+    }
+
+    // 邊界檢查（相對於整個圖表區域）
     if (tooltipData.fitInsideHorizontally) {
-      final maxRight = chartVirtualRect?.right ?? chartUsableSize.width;
-      final minLeft = chartVirtualRect?.left ?? 0.0;
+      final maxRight = size.width;
+      const minLeft = 0.0;
 
       if (tooltipLeft < minLeft) {
         tooltipLeft = minLeft;
@@ -401,14 +399,28 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     }
   }
 
-  Size _getChartUsableSize(Size size) {
-    return size;
+  /// 計算圖表座標對應的像素 X 位置（類似 LineChartPainter 的實作）
+  double _getPixelX(double chartX, Size size) {
+    final deltaX = chartData.maxX - chartData.minX;
+    if (deltaX == 0) return 0.0;
+
+    // 考慮變換後的座標計算
+    if (chartVirtualRect != null) {
+      final virtualWidth = chartVirtualRect!.width;
+      final virtualLeft = chartVirtualRect!.left;
+      final normalizedX = (chartX - chartData.minX) / deltaX;
+      return virtualLeft + (normalizedX * virtualWidth);
+    } else {
+      final pixelPerX = size.width / deltaX;
+      return (chartX - chartData.minX) * pixelPerX;
+    }
   }
 
   @override
   bool shouldRepaint(_BackgroundBlockTooltipPainter oldDelegate) {
     return touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex ||
-        !identical(touchedBlock.blockData, oldDelegate.touchedBlock.blockData) ||
+        !identical(
+            touchedBlock.blockData, oldDelegate.touchedBlock.blockData) ||
         chartData != oldDelegate.chartData ||
         chartVirtualRect != oldDelegate.chartVirtualRect;
   }

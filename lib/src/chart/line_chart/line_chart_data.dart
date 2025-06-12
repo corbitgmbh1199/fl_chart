@@ -1492,12 +1492,26 @@ class BackgroundBlockData with EquatableMixin {
       ];
 }
 
+/// 提供動態 tooltip 對齊方式的回調函式類型
+typedef GetTooltipAlignment = FLHorizontalAlignment Function(
+  TouchedBackgroundBlock touchedBlock,
+  Size chartSize,
+);
+
+/// 提供動態 tooltip 水平偏移的回調函式類型
+typedef GetTooltipHorizontalOffset = double Function(
+  TouchedBackgroundBlock touchedBlock,
+  Size chartSize,
+);
+
 /// 背景區塊的 tooltip 資料
 class BackgroundBlockTooltipData with EquatableMixin {
   /// 建立背景區塊的 tooltip 資料
   const BackgroundBlockTooltipData({
     this.getTooltipItems = defaultBackgroundBlockTooltipItem,
     this.getTooltipColor = defaultBackgroundBlockTooltipColor,
+    this.getTooltipAlignment,
+    this.getTooltipHorizontalOffset,
     BorderRadius? tooltipBorderRadius,
     this.tooltipPadding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     this.tooltipMargin = 16,
@@ -1516,6 +1530,12 @@ class BackgroundBlockTooltipData with EquatableMixin {
 
   /// 取得 tooltip 背景顏色的回調函式
   final GetBackgroundBlockTooltipColor getTooltipColor;
+
+  /// 動態取得 tooltip 水平對齊方式的回調函式（優先於 tooltipHorizontalAlignment）
+  final GetTooltipAlignment? getTooltipAlignment;
+
+  /// 動態取得 tooltip 水平偏移的回調函式（優先於 tooltipHorizontalOffset）
+  final GetTooltipHorizontalOffset? getTooltipHorizontalOffset;
 
   /// 設定 tooltip 的圓角半徑
   final BorderRadius? _tooltipBorderRadius;
@@ -1558,6 +1578,8 @@ class BackgroundBlockTooltipData with EquatableMixin {
   BackgroundBlockTooltipData copyWith({
     GetBackgroundBlockTooltipItems? getTooltipItems,
     GetBackgroundBlockTooltipColor? getTooltipColor,
+    GetTooltipAlignment? getTooltipAlignment,
+    GetTooltipHorizontalOffset? getTooltipHorizontalOffset,
     BorderRadius? tooltipBorderRadius,
     EdgeInsets? tooltipPadding,
     double? tooltipMargin,
@@ -1573,6 +1595,8 @@ class BackgroundBlockTooltipData with EquatableMixin {
       BackgroundBlockTooltipData(
         getTooltipItems: getTooltipItems ?? this.getTooltipItems,
         getTooltipColor: getTooltipColor ?? this.getTooltipColor,
+        getTooltipAlignment: getTooltipAlignment ?? this.getTooltipAlignment,
+        getTooltipHorizontalOffset: getTooltipHorizontalOffset ?? this.getTooltipHorizontalOffset,
         tooltipBorderRadius: tooltipBorderRadius ?? _tooltipBorderRadius,
         tooltipPadding: tooltipPadding ?? this.tooltipPadding,
         tooltipMargin: tooltipMargin ?? this.tooltipMargin,
@@ -1599,6 +1623,8 @@ class BackgroundBlockTooltipData with EquatableMixin {
     return BackgroundBlockTooltipData(
       getTooltipItems: b.getTooltipItems,
       getTooltipColor: b.getTooltipColor,
+      getTooltipAlignment: b.getTooltipAlignment,
+      getTooltipHorizontalOffset: b.getTooltipHorizontalOffset,
       tooltipBorderRadius: BorderRadius.lerp(a._tooltipBorderRadius, b._tooltipBorderRadius, t),
       tooltipPadding: EdgeInsets.lerp(a.tooltipPadding, b.tooltipPadding, t) ?? b.tooltipPadding,
       tooltipMargin: lerpDouble(a.tooltipMargin, b.tooltipMargin, t) ?? b.tooltipMargin,
@@ -1617,6 +1643,8 @@ class BackgroundBlockTooltipData with EquatableMixin {
   List<Object?> get props => [
         getTooltipItems,
         getTooltipColor,
+        getTooltipAlignment,
+        getTooltipHorizontalOffset,
         _tooltipBorderRadius,
         tooltipPadding,
         tooltipMargin,
@@ -1727,6 +1755,10 @@ class TouchedBackgroundBlock with EquatableMixin {
     required this.blockData,
     required this.blockIndex,
     required this.touchX,
+    this.chartMinX,
+    this.chartMaxX,
+    this.chartMinY,
+    this.chartMaxY,
   });
 
   /// 被觸碰的背景區塊資料
@@ -1737,6 +1769,26 @@ class TouchedBackgroundBlock with EquatableMixin {
 
   /// 觸碰的 X 座標
   final double touchX;
+
+  /// 圖表的最小 X 值（可選，用於更精確的對齊計算）
+  final double? chartMinX;
+
+  /// 圖表的最大 X 值（可選，用於更精確的對齊計算）
+  final double? chartMaxX;
+
+  /// 圖表的最小 Y 值（可選）
+  final double? chartMinY;
+
+  /// 圖表的最大 Y 值（可選）
+  final double? chartMaxY;
+
+  /// 計算觸碰點在圖表中的相對位置（0.0 到 1.0）
+  double? get relativePositionX {
+    if (chartMinX == null || chartMaxX == null) return null;
+    final range = chartMaxX! - chartMinX!;
+    if (range == 0) return 0.5;
+    return (touchX - chartMinX!) / range;
+  }
 
   @override
   List<Object?> get props => [blockIndex]; // 只比較 blockIndex，忽略 touchX 的變化

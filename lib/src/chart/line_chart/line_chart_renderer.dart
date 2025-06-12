@@ -207,6 +207,11 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
           blockData: block,
           blockIndex: i,
           touchX: touchX,
+          // 傳遞圖表範圍資訊以便對齊計算
+          chartMinX: data.minX,
+          chartMaxX: data.maxX,
+          chartMinY: data.minY,
+          chartMaxY: data.maxY,
         );
       }
     }

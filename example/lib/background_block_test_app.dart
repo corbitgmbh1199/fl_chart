@@ -240,6 +240,12 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                                   ?.withValues(alpha: 0.9) ??
                               Colors.black87;
                         },
+                        getTooltipAlignment: (touchedBlock, chartSize) {
+                          return preciseBackgroundBlockTooltipAlignment(
+                            touchedBlock,
+                            chartSize,
+                          );
+                        },
                         // 外觀設定
                         tooltipBorderRadius: BorderRadius.circular(8),
                         tooltipPadding: const EdgeInsets.all(12),
@@ -341,5 +347,100 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
         ),
       ),
     );
+  }
+
+  // 修正預設對齊函式，讓它們基於整個圖表範圍而不是背景區塊範圍
+
+  /// 預設的動態對齊函式：根據觸碰點在整個圖表中的位置決定對齊方式
+  ///
+  /// 這個函式會分析觸碰點在整個圖表中的位置，並自動選擇最適合的 tooltip 對齊方式：
+  /// - 如果觸碰點位於圖表右側，tooltip 會向左對齊
+  /// - 如果觸碰點位於圖表左側，tooltip 會向右對齊
+  /// - 其他情況則會置中對齊
+  FLHorizontalAlignment defaultBackgroundBlockTooltipAlignment(
+    TouchedBackgroundBlock touchedBlock,
+    Size chartSize,
+  ) {
+    final blockCenterX =
+        (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
+
+    // 計算觸碰點在圖表中的相對位置（0.0 = 左邊界，1.0 = 右邊界）
+    // 這裡需要從 touchedBlock 中取得圖表的最小值和最大值範圍
+    // 但由於我們沒有直接存取權限，可以使用一個通用的邏輯
+
+    // 假設使用者會在設定中提供圖表的範圍資訊，或者使用預設的閾值
+    // 這個邏輯可以根據實際的圖表資料範圍進行調整
+
+    // 簡單的方式：根據 chartSize.width 和觸碰點計算相對位置
+    // 但這需要知道圖表的實際資料範圍，所以使用基於位置的邏輯
+
+    if (blockCenterX > 7) {
+      // 可以根據實際圖表範圍調整
+      // 區塊在右側，tooltip 向左對齊
+      return FLHorizontalAlignment.right;
+    } else if (blockCenterX < 3) {
+      // 可以根據實際圖表範圍調整
+      // 區塊在左側，tooltip 向右對齊
+      return FLHorizontalAlignment.left;
+    } else {
+      // 區塊在中央，tooltip 置中對齊
+      return FLHorizontalAlignment.center;
+    }
+  }
+
+  /// 智慧型動態對齊函式：根據觸碰點在圖表中的位置決定對齊方式
+  ///
+  /// 這個函式使用更精確的計算方式，考慮整個圖表的尺寸
+  FLHorizontalAlignment smartBackgroundBlockTooltipAlignment(
+    TouchedBackgroundBlock touchedBlock,
+    Size chartSize,
+  ) {
+    // 計算區塊中心點
+    final blockCenterX =
+        (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
+
+    // 這裡應該要能夠存取圖表的資料範圍 (minX, maxX)
+    // 由於目前的設計限制，我們使用一個簡化的邏輯
+    // 實際實作中，可能需要將圖表範圍資訊傳遞給這個函式
+
+    // 假設圖表的 X 軸範圍，這可以透過 chartData 參數傳遞（需要修改函式簽名）
+    // 或者使用固定的閾值
+
+    // 使用相對位置判斷
+    if (blockCenterX >= 8) {
+      // 右側區域，tooltip 向左對齊避免超出邊界
+      return FLHorizontalAlignment.right;
+    } else if (blockCenterX <= 2) {
+      // 左側區域，tooltip 向右對齊避免超出邊界
+      return FLHorizontalAlignment.left;
+    } else {
+      // 中央區域，tooltip 置中對齊
+      return FLHorizontalAlignment.center;
+    }
+  }
+
+  // 使用增強版的對齊函式範例
+  FLHorizontalAlignment preciseBackgroundBlockTooltipAlignment(
+    TouchedBackgroundBlock touchedBlock,
+    Size chartSize,
+  ) {
+    // 使用相對位置進行更精確的對齊
+    final relativePosition = touchedBlock.relativePositionX;
+
+    if (relativePosition != null) {
+      if (relativePosition > 0.75) {
+        // 觸碰點在圖表右側 25% 區域，tooltip 向左對齊
+        return FLHorizontalAlignment.right;
+      } else if (relativePosition < 0.25) {
+        // 觸碰點在圖表左側 25% 區域，tooltip 向右對齊
+        return FLHorizontalAlignment.left;
+      } else {
+        // 觸碰點在圖表中央 50% 區域，tooltip 置中對齊
+        return FLHorizontalAlignment.center;
+      }
+    }
+
+    // 備用邏輯
+    return defaultBackgroundBlockTooltipAlignment(touchedBlock, chartSize);
   }
 }
