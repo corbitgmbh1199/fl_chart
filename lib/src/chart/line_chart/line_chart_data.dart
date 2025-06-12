@@ -112,7 +112,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
         betweenBarsData:
             lerpBetweenBarsDataList(a.betweenBarsData, b.betweenBarsData, t)!,
         backgroundBlocks: _lerpBackgroundBlockDataList(
-            a.backgroundBlocks, b.backgroundBlocks, t),
+            a.backgroundBlocks, b.backgroundBlocks, t,),
         lineTouchData: b.lineTouchData,
         showingTooltipIndicators: b.showingTooltipIndicators,
         rotationQuarterTurns: b.rotationQuarterTurns,
@@ -901,12 +901,15 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
   /// You can customize this tooltip using [touchTooltipData], indicator lines starts from position
   /// controlled by [getTouchLineStart] and ends at position controlled by [getTouchLineEnd].
   /// If you need to have a distance threshold for handling touches, use [touchSpotThreshold].
+  /// 
+  /// [backgroundBlockTooltipData] sets the appearance and behavior of background block tooltips.
   const LineTouchData({
     bool enabled = true,
     BaseTouchCallback<LineTouchResponse>? touchCallback,
     MouseCursorResolver<LineTouchResponse>? mouseCursorResolver,
     Duration? longPressDuration,
     this.touchTooltipData = const LineTouchTooltipData(),
+    this.backgroundBlockTooltipData = const BackgroundBlockTooltipData(),
     this.getTouchedSpotIndicator = defaultTouchedIndicators,
     this.touchSpotThreshold = 10,
     this.distanceCalculator = _xDistance,
@@ -922,6 +925,9 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
 
   /// Configs of how touch tooltip popup.
   final LineTouchTooltipData touchTooltipData;
+
+  /// Configs of how background block tooltip popup appears.
+  final BackgroundBlockTooltipData backgroundBlockTooltipData;
 
   /// Configs of how touch indicator looks like.
   final GetTouchedSpotIndicator getTouchedSpotIndicator;
@@ -952,6 +958,7 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
     MouseCursorResolver<LineTouchResponse>? mouseCursorResolver,
     Duration? longPressDuration,
     LineTouchTooltipData? touchTooltipData,
+    BackgroundBlockTooltipData? backgroundBlockTooltipData,
     GetTouchedSpotIndicator? getTouchedSpotIndicator,
     double? touchSpotThreshold,
     CalculateTouchDistance? distanceCalculator,
@@ -965,6 +972,7 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
         mouseCursorResolver: mouseCursorResolver ?? this.mouseCursorResolver,
         longPressDuration: longPressDuration ?? this.longPressDuration,
         touchTooltipData: touchTooltipData ?? this.touchTooltipData,
+        backgroundBlockTooltipData: backgroundBlockTooltipData ?? this.backgroundBlockTooltipData,
         getTouchedSpotIndicator:
             getTouchedSpotIndicator ?? this.getTouchedSpotIndicator,
         touchSpotThreshold: touchSpotThreshold ?? this.touchSpotThreshold,
@@ -982,6 +990,7 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
         mouseCursorResolver,
         longPressDuration,
         touchTooltipData,
+        backgroundBlockTooltipData,
         getTouchedSpotIndicator,
         touchSpotThreshold,
         distanceCalculator,
@@ -1385,7 +1394,7 @@ class LineChartDataTween extends Tween<LineChartData> {
   LineChartData lerp(double t) => begin!.lerp(begin!, end!, t);
 }
 
-// 在 BetweenBarsData 類別後面新增以下程式碼
+// 簡化 BackgroundBlockData 類別
 
 /// 定義背景區塊資料
 class BackgroundBlockData with EquatableMixin {
@@ -1395,17 +1404,19 @@ class BackgroundBlockData with EquatableMixin {
   /// [color] 是區塊的顏色，如果同時提供 [gradient] 則會拋出例外
   /// [gradient] 是區塊的漸層色彩，如果同時提供 [color] 則會拋出例外
   /// [show] 決定是否顯示此區塊
-  /// [tooltipData] 包含此區塊的 tooltip 資訊
+  /// [label] 是區塊的標籤，會顯示在 tooltip 中
+  /// [data] 可以存放任意自定義資料，用於 tooltip 回調函式
   BackgroundBlockData({
     required this.startX,
     required this.endX,
     Color? color,
     this.gradient,
     this.show = true,
-    this.tooltipData,
+    this.label,
+    this.data,
   }) : color = color ??
             ((color == null && gradient == null)
-                ? Colors.grey.withOpacity(0.2)
+                ? Colors.grey.withValues(alpha: 0.2)
                 : null) {
     if (color != null && gradient != null) {
       throw ArgumentError('不能同時提供 color 和 gradient');
@@ -1427,8 +1438,11 @@ class BackgroundBlockData with EquatableMixin {
   /// 是否顯示區塊
   final bool show;
 
-  /// 背景區塊的 tooltip 資料
-  final BackgroundBlockTooltipData? tooltipData;
+  /// 區塊的標籤（可選）
+  final String? label;
+
+  /// 自定義資料（可選），可用於 tooltip 顯示
+  final Map<String, dynamic>? data;
 
   /// 複製當前 [BackgroundBlockData] 並替換提供的值
   BackgroundBlockData copyWith({
@@ -1437,7 +1451,8 @@ class BackgroundBlockData with EquatableMixin {
     Color? color,
     Gradient? gradient,
     bool? show,
-    BackgroundBlockTooltipData? tooltipData,
+    String? label,
+    Map<String, dynamic>? data,
   }) =>
       BackgroundBlockData(
         startX: startX ?? this.startX,
@@ -1445,7 +1460,8 @@ class BackgroundBlockData with EquatableMixin {
         color: color ?? this.color,
         gradient: gradient ?? this.gradient,
         show: show ?? this.show,
-        tooltipData: tooltipData ?? this.tooltipData,
+        label: label ?? this.label,
+        data: data ?? this.data,
       );
 
   /// 線性插值
@@ -1460,8 +1476,8 @@ class BackgroundBlockData with EquatableMixin {
         color: Color.lerp(a.color, b.color, t),
         gradient: Gradient.lerp(a.gradient, b.gradient, t),
         show: b.show,
-        tooltipData:
-            BackgroundBlockTooltipData.lerp(a.tooltipData, b.tooltipData, t),
+        label: b.label,
+        data: b.data,
       );
 
   @override
@@ -1471,7 +1487,8 @@ class BackgroundBlockData with EquatableMixin {
         color,
         gradient,
         show,
-        tooltipData,
+        label,
+        data,
       ];
 }
 
@@ -1479,46 +1496,94 @@ class BackgroundBlockData with EquatableMixin {
 class BackgroundBlockTooltipData with EquatableMixin {
   /// 建立背景區塊的 tooltip 資料
   const BackgroundBlockTooltipData({
-    this.text = '',
-    this.textStyle = const TextStyle(
-      color: Colors.white,
-      fontSize: 14,
-      fontWeight: FontWeight.bold,
-    ),
-    this.backgroundColor = Colors.black87,
-    this.borderRadius = const BorderRadius.all(Radius.circular(4)),
-    this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-  });
+    this.getTooltipItems = defaultBackgroundBlockTooltipItem,
+    this.getTooltipColor = defaultBackgroundBlockTooltipColor,
+    BorderRadius? tooltipBorderRadius,
+    this.tooltipPadding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    this.tooltipMargin = 16,
+    this.tooltipHorizontalAlignment = FLHorizontalAlignment.center,
+    this.tooltipHorizontalOffset = 0,
+    this.maxContentWidth = 200,
+    this.fitInsideHorizontally = true,
+    this.fitInsideVertically = true,
+    this.showOnTopOfTheChartBoxArea = true,
+    this.rotateAngle = 0.0,
+    this.tooltipBorder = BorderSide.none,
+  }) : _tooltipBorderRadius = tooltipBorderRadius;
 
-  /// tooltip 顯示的文字
-  final String text;
+  /// 取得 tooltip 項目的回調函式
+  final GetBackgroundBlockTooltipItems getTooltipItems;
 
-  /// 文字樣式
-  final TextStyle textStyle;
+  /// 取得 tooltip 背景顏色的回調函式
+  final GetBackgroundBlockTooltipColor getTooltipColor;
 
-  /// 背景顏色
-  final Color backgroundColor;
+  /// 設定 tooltip 的圓角半徑
+  final BorderRadius? _tooltipBorderRadius;
 
-  /// 圓角半徑
-  final BorderRadius borderRadius;
+  /// 取得 tooltip 的圓角半徑
+  BorderRadius get tooltipBorderRadius =>
+      _tooltipBorderRadius ?? BorderRadius.circular(4);
 
-  /// 內邊距
-  final EdgeInsets padding;
+  /// tooltip 內部的邊距
+  final EdgeInsets tooltipPadding;
+
+  /// tooltip 與觸碰點的距離
+  final double tooltipMargin;
+
+  /// tooltip 水平對齊方式
+  final FLHorizontalAlignment tooltipHorizontalAlignment;
+
+  /// tooltip 水平偏移量
+  final double tooltipHorizontalOffset;
+
+  /// tooltip 最大寬度
+  final double maxContentWidth;
+
+  /// 是否強制 tooltip 保持在水平邊界內
+  final bool fitInsideHorizontally;
+
+  /// 是否強制 tooltip 保持在垂直邊界內
+  final bool fitInsideVertically;
+
+  /// 是否將 tooltip 顯示在圖表區域頂部
+  final bool showOnTopOfTheChartBoxArea;
+
+  /// tooltip 旋轉角度
+  final double rotateAngle;
+
+  /// tooltip 邊框樣式
+  final BorderSide tooltipBorder;
 
   /// 複製並替換指定值
   BackgroundBlockTooltipData copyWith({
-    String? text,
-    TextStyle? textStyle,
-    Color? backgroundColor,
-    BorderRadius? borderRadius,
-    EdgeInsets? padding,
+    GetBackgroundBlockTooltipItems? getTooltipItems,
+    GetBackgroundBlockTooltipColor? getTooltipColor,
+    BorderRadius? tooltipBorderRadius,
+    EdgeInsets? tooltipPadding,
+    double? tooltipMargin,
+    FLHorizontalAlignment? tooltipHorizontalAlignment,
+    double? tooltipHorizontalOffset,
+    double? maxContentWidth,
+    bool? fitInsideHorizontally,
+    bool? fitInsideVertically,
+    bool? showOnTopOfTheChartBoxArea,
+    double? rotateAngle,
+    BorderSide? tooltipBorder,
   }) =>
       BackgroundBlockTooltipData(
-        text: text ?? this.text,
-        textStyle: textStyle ?? this.textStyle,
-        backgroundColor: backgroundColor ?? this.backgroundColor,
-        borderRadius: borderRadius ?? this.borderRadius,
-        padding: padding ?? this.padding,
+        getTooltipItems: getTooltipItems ?? this.getTooltipItems,
+        getTooltipColor: getTooltipColor ?? this.getTooltipColor,
+        tooltipBorderRadius: tooltipBorderRadius ?? _tooltipBorderRadius,
+        tooltipPadding: tooltipPadding ?? this.tooltipPadding,
+        tooltipMargin: tooltipMargin ?? this.tooltipMargin,
+        tooltipHorizontalAlignment: tooltipHorizontalAlignment ?? this.tooltipHorizontalAlignment,
+        tooltipHorizontalOffset: tooltipHorizontalOffset ?? this.tooltipHorizontalOffset,
+        maxContentWidth: maxContentWidth ?? this.maxContentWidth,
+        fitInsideHorizontally: fitInsideHorizontally ?? this.fitInsideHorizontally,
+        fitInsideVertically: fitInsideVertically ?? this.fitInsideVertically,
+        showOnTopOfTheChartBoxArea: showOnTopOfTheChartBoxArea ?? this.showOnTopOfTheChartBoxArea,
+        rotateAngle: rotateAngle ?? this.rotateAngle,
+        tooltipBorder: tooltipBorder ?? this.tooltipBorder,
       );
 
   /// 線性插值
@@ -1532,27 +1597,128 @@ class BackgroundBlockTooltipData with EquatableMixin {
     if (b == null) return a;
 
     return BackgroundBlockTooltipData(
-      text: b.text,
-      textStyle: TextStyle.lerp(a.textStyle, b.textStyle, t) ?? b.textStyle,
-      backgroundColor: Color.lerp(a.backgroundColor, b.backgroundColor, t) ??
-          b.backgroundColor,
-      borderRadius: BorderRadius.lerp(a.borderRadius, b.borderRadius, t) ??
-          b.borderRadius,
-      padding: EdgeInsets.lerp(a.padding, b.padding, t) ?? b.padding,
+      getTooltipItems: b.getTooltipItems,
+      getTooltipColor: b.getTooltipColor,
+      tooltipBorderRadius: BorderRadius.lerp(a._tooltipBorderRadius, b._tooltipBorderRadius, t),
+      tooltipPadding: EdgeInsets.lerp(a.tooltipPadding, b.tooltipPadding, t) ?? b.tooltipPadding,
+      tooltipMargin: lerpDouble(a.tooltipMargin, b.tooltipMargin, t) ?? b.tooltipMargin,
+      tooltipHorizontalAlignment: b.tooltipHorizontalAlignment,
+      tooltipHorizontalOffset: lerpDouble(a.tooltipHorizontalOffset, b.tooltipHorizontalOffset, t) ?? b.tooltipHorizontalOffset,
+      maxContentWidth: lerpDouble(a.maxContentWidth, b.maxContentWidth, t) ?? b.maxContentWidth,
+      fitInsideHorizontally: b.fitInsideHorizontally,
+      fitInsideVertically: b.fitInsideVertically,
+      showOnTopOfTheChartBoxArea: b.showOnTopOfTheChartBoxArea,
+      rotateAngle: lerpDouble(a.rotateAngle, b.rotateAngle, t) ?? b.rotateAngle,
+      tooltipBorder: BorderSide.lerp(a.tooltipBorder, b.tooltipBorder, t),
     );
   }
 
   @override
   List<Object?> get props => [
-        text,
-        textStyle,
-        backgroundColor,
-        borderRadius,
-        padding,
+        getTooltipItems,
+        getTooltipColor,
+        _tooltipBorderRadius,
+        tooltipPadding,
+        tooltipMargin,
+        tooltipHorizontalAlignment,
+        tooltipHorizontalOffset,
+        maxContentWidth,
+        fitInsideHorizontally,
+        fitInsideVertically,
+        showOnTopOfTheChartBoxArea,
+        rotateAngle,
+        tooltipBorder,
       ];
 }
 
-// 在檔案末尾新增以下類別
+/// 提供背景區塊 tooltip 項目的回調函式類型
+typedef GetBackgroundBlockTooltipItems = List<BackgroundBlockTooltipItem?> Function(
+  TouchedBackgroundBlock touchedBlock,
+);
+
+/// 提供背景區塊 tooltip 背景顏色的回調函式類型
+typedef GetBackgroundBlockTooltipColor = Color Function(
+  TouchedBackgroundBlock touchedBlock,
+);
+
+/// 預設的背景區塊 tooltip 項目實作
+List<BackgroundBlockTooltipItem> defaultBackgroundBlockTooltipItem(
+  TouchedBackgroundBlock touchedBlock,
+) {
+  final blockData = touchedBlock.blockData;
+
+  // 優先使用標籤，如果沒有標籤則使用座標範圍
+  String text;
+  if (blockData.label != null && blockData.label!.isNotEmpty) {
+    text = blockData.label!;
+  } else {
+    text =
+        '${blockData.startX.toStringAsFixed(1)} - ${blockData.endX.toStringAsFixed(1)}';
+  }
+
+  return [
+    BackgroundBlockTooltipItem(
+      text,
+      const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  ];
+}
+
+/// 預設的背景區塊 tooltip 背景顏色實作
+Color defaultBackgroundBlockTooltipColor(TouchedBackgroundBlock touchedBlock) {
+  final blockData = touchedBlock.blockData;
+  
+  // 根據區塊顏色自動決定 tooltip 背景色
+  if (blockData.color != null) {
+    // 使用區塊顏色的深色版本
+    return blockData.color!.withValues(alpha: 0.9);
+  } else if (blockData.gradient != null && blockData.gradient!.colors.isNotEmpty) {
+    // 使用漸層第一個顏色的深色版本
+    return blockData.gradient!.colors.first.withValues(alpha: 0.9);
+  }
+  
+  return Colors.black87;
+}
+
+/// 背景區塊 tooltip 項目資料
+class BackgroundBlockTooltipItem with EquatableMixin {
+  /// 建立背景區塊 tooltip 項目
+  const BackgroundBlockTooltipItem(
+    this.text,
+    this.textStyle, {
+    this.textAlign = TextAlign.center,
+    this.textDirection = TextDirection.ltr,
+    this.children,
+  });
+
+  /// 顯示的文字
+  final String text;
+
+  /// 文字樣式
+  final TextStyle textStyle;
+
+  /// 文字對齊方式
+  final TextAlign textAlign;
+
+  /// 文字方向
+  final TextDirection textDirection;
+
+  /// 額外的文字樣式和格式
+  final List<TextSpan>? children;
+
+  @override
+  List<Object?> get props => [
+        text,
+        textStyle,
+        textAlign,
+        textDirection,
+        children,
+      ];
+}
 
 /// 被觸碰的背景區塊資訊
 class TouchedBackgroundBlock with EquatableMixin {

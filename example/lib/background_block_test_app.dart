@@ -127,78 +127,127 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                         startX: 1.5,
                         endX: 3.5,
                         color: Colors.red.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 1\n包含多個資料點',
-                        ),
+                        label: '警告區間',
+                        data: {
+                          'severity': 'high',
+                          'type': 'warning'
+                        }, // 可選的自定義資料
                       ),
                       // 測試區塊 2
                       BackgroundBlockData(
                         startX: 3.8,
                         endX: 5.2,
                         color: Colors.green.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 2\n綠色背景區域',
-                        ),
+                        label: '重要時段', // 只需要設定標籤
                       ),
                       // 測試區塊 3
                       BackgroundBlockData(
                         startX: 5.8,
                         endX: 7.2,
                         color: Colors.orange.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 3\n橙色背景區域',
-                        ),
+                        label: '重要時段', // 只需要設定標籤
                       ),
                       // 測試區塊 4
                       BackgroundBlockData(
                         startX: 7.8,
                         endX: 9.2,
                         color: Colors.purple.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 4\n紫色背景區域',
-                        ),
+                        label: '重要時段', // 只需要設定標籤
                       ),
                       // 測試區塊 5
                       BackgroundBlockData(
                         startX: 10.5,
                         endX: 12.5,
                         color: Colors.cyan.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 5\n青色背景區域',
-                        ),
+                        label: '重要時段', // 只需要設定標籤
                       ),
                       // 測試區塊 6
                       BackgroundBlockData(
                         startX: 13.8,
                         endX: 15.2,
                         color: Colors.pink.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 6\n粉色背景區域',
-                        ),
+                        label: '警告區間',
+                        data: {
+                          'severity': 'high',
+                          'type': 'warning'
+                        }, // 可選的自定義資料
                       ),
                       // 測試區塊 7
                       BackgroundBlockData(
                         startX: 15.8,
                         endX: 17.2,
                         color: Colors.amber.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 7\n琥珀色背景區域',
-                        ),
+                        label: '重要時段', // 只需要設定標籤
                       ),
                       // 測試區塊 8
                       BackgroundBlockData(
                         startX: 17.8,
                         endX: 19.5,
                         color: Colors.teal.withValues(alpha: 0.2),
-                        tooltipData: const BackgroundBlockTooltipData(
-                          text: '測試區塊 8\n藍綠色背景區域',
-                        ),
+                        label: '重要時段', // 只需要設定標籤
                       ),
                     ],
                     // 啟用觸控和縮放功能
                     lineTouchData: LineTouchData(
                       enabled: true,
                       handleBuiltInTouches: true,
+                      backgroundBlockTooltipData: BackgroundBlockTooltipData(
+                        // 自定義 tooltip 項目（可選）
+                        getTooltipItems: (touchedBlock) {
+                          final blockData = touchedBlock.blockData;
+                          final items = <BackgroundBlockTooltipItem>[];
+
+                          // 主要標籤
+                          if (blockData.label != null) {
+                            items.add(BackgroundBlockTooltipItem(
+                              blockData.label!,
+                              const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ));
+                          }
+
+                          // 座標資訊
+                          items.add(BackgroundBlockTooltipItem(
+                            '範圍: ${blockData.startX} - ${blockData.endX}',
+                            const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ));
+
+                          // 自定義資料（如果有的話）
+                          if (blockData.data != null) {
+                            final customData = blockData.data!;
+                            if (customData.containsKey('severity')) {
+                              items.add(BackgroundBlockTooltipItem(
+                                '嚴重度: ${customData['severity']}',
+                                const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ));
+                            }
+                          }
+
+                          return items;
+                        },
+                        // 自定義背景顏色（可選）
+                        getTooltipColor: (touchedBlock) {
+                          return touchedBlock.blockData.color
+                                  ?.withValues(alpha: 0.9) ??
+                              Colors.black87;
+                        },
+                        // 外觀設定
+                        tooltipBorderRadius: BorderRadius.circular(8),
+                        tooltipPadding: const EdgeInsets.all(12),
+                        tooltipBorder:
+                            const BorderSide(color: Colors.white30, width: 1),
+                        fitInsideHorizontally: true,
+                        fitInsideVertically: true,
+                      ),
                       touchTooltipData: LineTouchTooltipData(
                         getTooltipColor: (touchedSpot) => Colors.blueAccent,
                         getTooltipItems: (List<LineBarSpot> touchedBarSpots) {

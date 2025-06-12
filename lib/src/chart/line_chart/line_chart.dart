@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:fl_chart/src/chart/base/axis_chart/axis_chart_scaffold_widget.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/scale_axis.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/transformation_config.dart';
@@ -59,25 +57,11 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
 
   final _lineChartHelper = LineChartHelper();
 
-  // 新增除錯變數
-  static const bool _enableDebugLogs = true; // 開發時設為 true，發布時設為 false
-  int _touchEventCounter = 0;
   int? _lastTouchedBlockIndex;
-
-  void _debugLog(String message) {
-    if (_enableDebugLogs) {
-      print('[LineChart Debug] $message');
-    }
-  }
-
-  int _buildCounter = 0;
 
   @override
   Widget build(BuildContext context) {
-    _buildCounter++;
-    _debugLog('Widget 重建 #$_buildCounter');
-    _debugLog('目前背景區塊: ${_touchedBackgroundBlock?.blockIndex}');
-    
+
     final showingData = _getData();
 
     return AxisChartScaffoldWidget(
@@ -95,33 +79,18 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
           ),
           // 顯示背景區塊的 tooltip
           if (_touchedBackgroundBlock != null)
-            _buildBackgroundBlockTooltip(context, chartVirtualRect),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _BackgroundBlockTooltipPainter(
+                  touchedBlock: _touchedBackgroundBlock!,
+                  chartData: showingData,
+                  chartVirtualRect: chartVirtualRect,
+                ),
+              ),
+            ),
         ],
       ),
       data: showingData,
-    );
-  }
-
-    /// 建構背景區塊的 tooltip Widget
-  Widget _buildBackgroundBlockTooltip(BuildContext context, Rect? chartVirtualRect) {
-    final block = _touchedBackgroundBlock!;
-    final tooltipData = block.blockData.tooltipData!;
-
-    _debugLog('建構背景區塊 tooltip: 區塊 ${block.blockIndex}');
-
-    if (tooltipData.text.isEmpty) {
-      _debugLog('Tooltip 文字為空，返回 SizedBox.shrink()');
-      return const SizedBox.shrink();
-    }
-
-    return Positioned.fill(
-      child: CustomPaint(
-        painter: _BackgroundBlockTooltipPainter(
-          touchedBlock: block,
-          chartData: _getData(),
-          chartVirtualRect: chartVirtualRect,
-        ),
-      ),
     );
   }
 
@@ -183,18 +152,9 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       return;
     }
 
-    _touchEventCounter++;
-    _debugLog('=== 觸碰事件 #$_touchEventCounter ===');
-    _debugLog('事件類型: ${event.runtimeType}');
-    _debugLog('是否為互動事件: ${event.isInterestedForInteractions}');
-    _debugLog('觸碰線條數量: ${touchResponse?.lineBarSpots?.length ?? 0}');
-    _debugLog('觸碰背景區塊: ${touchResponse?.touchedBackgroundBlock?.blockIndex}');
-    _debugLog('目前背景區塊: ${_touchedBackgroundBlock?.blockIndex}');
-
     _providedTouchCallback?.call(event, touchResponse);
 
     if (!event.isInterestedForInteractions) {
-      _debugLog('清除所有狀態（非互動事件）');
       setState(() {
         _showingTouchedTooltips.clear();
         _showingTouchedIndicators.clear();
@@ -207,7 +167,6 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
     // 優先處理線條觸碰（spots tooltip 優先）
     if (touchResponse?.lineBarSpots != null &&
         touchResponse!.lineBarSpots!.isNotEmpty) {
-      _debugLog('觸碰到線條，優先顯示線條 tooltip');
       setState(() {
         _touchedBackgroundBlock = null;
         _lastTouchedBlockIndex = null;
@@ -233,10 +192,8 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
     final newBackgroundBlock = touchResponse?.touchedBackgroundBlock;
     if (newBackgroundBlock != null) {
       final newBlockIndex = newBackgroundBlock.blockIndex;
-      _debugLog('觸碰到背景區塊: $newBlockIndex（沒有線條觸碰）');
 
       if (_lastTouchedBlockIndex != newBlockIndex) {
-        _debugLog('更新背景區塊狀態 ($newBlockIndex)');
         setState(() {
           _touchedBackgroundBlock = newBackgroundBlock;
           _showingTouchedTooltips.clear();
@@ -244,13 +201,11 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
           _lastTouchedBlockIndex = newBlockIndex;
         });
       } else {
-        _debugLog('同樣的背景區塊，跳過狀態更新');
       }
       return;
     }
 
     // 清除所有狀態
-    _debugLog('沒有觸碰到任何物件，清除狀態');
     if (_touchedBackgroundBlock != null ||
         _showingTouchedTooltips.isNotEmpty ||
         _showingTouchedIndicators.isNotEmpty) {
@@ -274,7 +229,7 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
   }
 }
 
-// 修正 _BackgroundBlockTooltipPainter 類別
+// 修正 _BackgroundBlockTooltipPainter 以使用全域 tooltip 設定
 
 class _BackgroundBlockTooltipPainter extends CustomPainter {
   _BackgroundBlockTooltipPainter({
@@ -287,77 +242,116 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
   final LineChartData chartData;
   final Rect? chartVirtualRect;
 
-  static int _paintCounter = 0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    _paintCounter++;
-    print('[Tooltip Painter] 繪製 #$_paintCounter - 區塊 ${touchedBlock.blockIndex}');
-    
-    final tooltipData = touchedBlock.blockData.tooltipData!;
 
-    if (tooltipData.text.isEmpty) {
-      print('[Tooltip Painter] 文字為空，跳過繪製');
+    // 使用全域的背景區塊 tooltip 設定
+    final tooltipData = chartData.lineTouchData.backgroundBlockTooltipData;
+
+    // 使用全域 tooltip 系統取得項目
+    final tooltipItems = tooltipData.getTooltipItems(touchedBlock);
+    if (tooltipItems.isEmpty || tooltipItems.every((item) => item == null)) {
       return;
     }
 
-    // 計算 tooltip 位置 - 考慮變換矩陣
+    // 建立文字繪製器清單
+    final textPainters = <TextPainter>[];
+    for (final item in tooltipItems) {
+      if (item == null) continue;
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: item.text,
+          style: item.textStyle,
+          children: item.children,
+        ),
+        textAlign: item.textAlign,
+        textDirection: item.textDirection,
+      )..layout(maxWidth: tooltipData.maxContentWidth);
+
+      textPainters.add(textPainter);
+    }
+
+    if (textPainters.isEmpty) {
+      return;
+    }
+
+    // 計算 tooltip 尺寸
+    var maxWidth = 0.0;
+    var totalHeight = 0.0;
+    const textMargin = 4.0;
+
+    for (final painter in textPainters) {
+      if (painter.width > maxWidth) {
+        maxWidth = painter.width;
+      }
+      totalHeight += painter.height;
+    }
+    totalHeight += (textPainters.length - 1) * textMargin;
+
+    final tooltipWidth = maxWidth + tooltipData.tooltipPadding.horizontal;
+    final tooltipHeight = totalHeight + tooltipData.tooltipPadding.vertical;
+
+    // 計算 tooltip 位置
     final blockCenterX = (touchedBlock.blockData.startX + touchedBlock.blockData.endX) / 2;
-    
-    // 取得實際的圖表可用尺寸
     final chartUsableSize = _getChartUsableSize(size);
     final deltaX = chartData.maxX - chartData.minX;
 
-    // 避免除以零的情況
     if (deltaX == 0) {
-      print('[Tooltip Painter] deltaX 為 0，跳過繪製');
       return;
     }
 
     // 考慮變換後的座標計算
-    double tooltipX;
+    double tooltipCenterX;
     if (chartVirtualRect != null) {
-      // 在縮放模式下，需要考慮虛擬矩形的變換
       final virtualWidth = chartVirtualRect!.width;
       final virtualLeft = chartVirtualRect!.left;
-      
-      // 計算在虛擬座標系統中的位置
       final normalizedX = (blockCenterX - chartData.minX) / deltaX;
-      tooltipX = virtualLeft + (normalizedX * virtualWidth);
-      
-      print('[Tooltip Painter] 縮放模式 - virtualRect: $chartVirtualRect');
-      print('[Tooltip Painter] normalizedX: $normalizedX, tooltipX: $tooltipX');
+      tooltipCenterX = virtualLeft + (normalizedX * virtualWidth);
     } else {
-      // 正常模式下的計算
       final pixelPerX = chartUsableSize.width / deltaX;
-      tooltipX = (blockCenterX - chartData.minX) * pixelPerX;
+      tooltipCenterX = (blockCenterX - chartData.minX) * pixelPerX;
     }
 
-    print('[Tooltip Painter] 位置計算: blockCenterX=$blockCenterX, tooltipX=$tooltipX');
+    // 根據對齊方式計算 tooltip 左邊位置
+    double tooltipLeft;
+    switch (tooltipData.tooltipHorizontalAlignment) {
+      case FLHorizontalAlignment.left:
+        tooltipLeft = tooltipCenterX + tooltipData.tooltipHorizontalOffset;
+      case FLHorizontalAlignment.right:
+        tooltipLeft = tooltipCenterX - tooltipWidth + tooltipData.tooltipHorizontalOffset;
+      case FLHorizontalAlignment.center:
+        tooltipLeft = tooltipCenterX - tooltipWidth / 2 + tooltipData.tooltipHorizontalOffset;
+    }
 
-    // 建立文字繪製器
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: tooltipData.text,
-        style: tooltipData.textStyle,
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    // 計算 tooltip 頂部位置
+    double tooltipTop;
+    if (tooltipData.showOnTopOfTheChartBoxArea) {
+      tooltipTop = -tooltipHeight - tooltipData.tooltipMargin;
+    } else {
+      tooltipTop = tooltipData.tooltipMargin;
+    }
 
-    // 計算 tooltip 背景尺寸
-    final tooltipWidth = textPainter.width + tooltipData.padding.horizontal;
-    final tooltipHeight = textPainter.height + tooltipData.padding.vertical;
+    // 邊界檢查
+    if (tooltipData.fitInsideHorizontally) {
+      final maxRight = chartVirtualRect?.right ?? chartUsableSize.width;
+      final minLeft = chartVirtualRect?.left ?? 0.0;
 
-    // 計算 tooltip 位置（在圖表頂部）
-    var tooltipLeft = tooltipX - tooltipWidth / 2;
-    const tooltipTop = 20.0;
+      if (tooltipLeft < minLeft) {
+        tooltipLeft = minLeft;
+      } else if (tooltipLeft + tooltipWidth > maxRight) {
+        tooltipLeft = maxRight - tooltipWidth;
+      }
+    }
 
-    // 確保 tooltip 不會超出邊界
-    final maxWidth = chartVirtualRect?.width ?? chartUsableSize.width;
-    final minLeft = chartVirtualRect?.left ?? 0.0;
-    final maxRight = (chartVirtualRect?.right ?? chartUsableSize.width) - tooltipWidth;
-    
-    tooltipLeft = tooltipLeft.clamp(minLeft, maxRight.clamp(minLeft, double.infinity));
+    if (tooltipData.fitInsideVertically) {
+      if (tooltipTop < 0) {
+        tooltipTop = 0;
+      } else if (tooltipTop + tooltipHeight > size.height) {
+        tooltipTop = size.height - tooltipHeight;
+      }
+    }
 
     // 繪製 tooltip 背景
     final tooltipRect = Rect.fromLTWH(
@@ -367,65 +361,55 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
       tooltipHeight,
     );
 
+    final backgroundColor = tooltipData.getTooltipColor(touchedBlock);
     final backgroundPaint = Paint()
-      ..color = tooltipData.backgroundColor
+      ..color = backgroundColor
       ..style = PaintingStyle.fill;
 
-    // 繪製背景陰影
-    final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.1)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRRect(
-      RRect.fromRectAndCorners(
-        tooltipRect.translate(2, 2), // 陰影偏移
-        topLeft: tooltipData.borderRadius.topLeft,
-        topRight: tooltipData.borderRadius.topRight,
-        bottomLeft: tooltipData.borderRadius.bottomLeft,
-        bottomRight: tooltipData.borderRadius.bottomRight,
-      ),
-      shadowPaint,
+    // 繪製背景
+    final roundedRect = RRect.fromRectAndCorners(
+      tooltipRect,
+      topLeft: tooltipData.tooltipBorderRadius.topLeft,
+      topRight: tooltipData.tooltipBorderRadius.topRight,
+      bottomLeft: tooltipData.tooltipBorderRadius.bottomLeft,
+      bottomRight: tooltipData.tooltipBorderRadius.bottomRight,
     );
 
-    canvas.drawRRect(
-      RRect.fromRectAndCorners(
-        tooltipRect,
-        topLeft: tooltipData.borderRadius.topLeft,
-        topRight: tooltipData.borderRadius.topRight,
-        bottomLeft: tooltipData.borderRadius.bottomLeft,
-        bottomRight: tooltipData.borderRadius.bottomRight,
-      ),
-      backgroundPaint,
-    );
+    canvas.drawRRect(roundedRect, backgroundPaint);
+
+    // 繪製邊框
+    if (tooltipData.tooltipBorder != BorderSide.none) {
+      final borderPaint = Paint()
+        ..color = tooltipData.tooltipBorder.color
+        ..strokeWidth = tooltipData.tooltipBorder.width
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawRRect(roundedRect, borderPaint);
+    }
 
     // 繪製文字
-    textPainter.paint(
-      canvas,
-      Offset(
-        tooltipLeft + tooltipData.padding.left,
-        tooltipTop + tooltipData.padding.top,
-      ),
-    );
+    var currentY = tooltipTop + tooltipData.tooltipPadding.top;
+    for (final textPainter in textPainters) {
+      textPainter.paint(
+        canvas,
+        Offset(
+          tooltipLeft + tooltipData.tooltipPadding.left,
+          currentY,
+        ),
+      );
+      currentY += textPainter.height + textMargin;
+    }
   }
 
   Size _getChartUsableSize(Size size) {
-    // 如果有虛擬矩形，使用實際的畫布尺寸
     return size;
   }
 
   @override
   bool shouldRepaint(_BackgroundBlockTooltipPainter oldDelegate) {
-    final shouldRepaint = touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex ||
+    return touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex ||
         !identical(touchedBlock.blockData, oldDelegate.touchedBlock.blockData) ||
         chartData != oldDelegate.chartData ||
         chartVirtualRect != oldDelegate.chartVirtualRect;
-    
-    print('[Tooltip Painter] shouldRepaint: $shouldRepaint');
-    print('  - 區塊索引改變: ${touchedBlock.blockIndex != oldDelegate.touchedBlock.blockIndex}');
-    print('  - 區塊資料改變: ${!identical(touchedBlock.blockData, oldDelegate.touchedBlock.blockData)}');
-    print('  - 圖表資料改變: ${chartData != oldDelegate.chartData}');
-    print('  - 虛擬矩形改變: ${chartVirtualRect != oldDelegate.chartVirtualRect}');
-    
-    return shouldRepaint;
   }
 }

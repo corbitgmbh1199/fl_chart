@@ -13,17 +13,6 @@ import 'package:flutter/material.dart';
 
 /// Paints [LineChartData] in the canvas, it can be used in a [CustomPainter]
 class LineChartPainter extends AxisChartPainter<LineChartData> {
-  /// Paints [dataList] into canvas, it is the animating [LineChartData],
-  /// [targetData] is the animation's target and remains the same
-  /// during animation, then we should use it  when we need to show
-  /// tooltips or something like that, because [dataList] is changing constantly.
-  ///
-  /// [textScale] used for scaling texts inside the chart,
-  /// parent can use [MediaQuery.textScaleFactor] to respect
-  /// the system's font size.
-  /// 
-  
-  late Paint _backgroundBlockPaint;
 
   LineChartPainter() : super() {
     _barPaint = Paint()..style = PaintingStyle.stroke;
@@ -53,6 +42,17 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     _clipPaint = Paint();
     _backgroundBlockPaint = Paint()..style = PaintingStyle.fill;
   }
+  /// Paints [dataList] into canvas, it is the animating [LineChartData],
+  /// [targetData] is the animation's target and remains the same
+  /// during animation, then we should use it  when we need to show
+  /// tooltips or something like that, because [dataList] is changing constantly.
+  ///
+  /// [textScale] used for scaling texts inside the chart,
+  /// parent can use [MediaQuery.textScaleFactor] to respect
+  /// the system's font size.
+  ///
+
+  late Paint _backgroundBlockPaint;
 
   late Paint _barPaint;
   late Paint _barAreaPaint;
@@ -219,14 +219,14 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     }
 
     final viewSize = canvasWrapper.size;
-    final data = holder.data;
 
     // 考慮變換後的座標計算
     final leftX = getPixelX(blockData.startX, viewSize, holder);
     final rightX = getPixelX(blockData.endX, viewSize, holder);
 
     // 如果有虛擬矩形，需要調整 Y 座標範圍
-    double topY, bottomY;
+    double topY;
+    double bottomY;
     if (holder.chartVirtualRect != null) {
       // 在縮放模式下，背景區塊應該覆蓋整個可見區域
       topY = holder.chartVirtualRect!.top;
@@ -253,7 +253,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
 
     canvasWrapper.drawRect(rect, _backgroundBlockPaint);
   }
-  
+
   /// 繪製背景區塊的 tooltip
   @visibleForTesting
   void drawBackgroundBlockTooltips(
@@ -1457,7 +1457,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     return touchedSpots.isEmpty ? null : touchedSpots;
   }
 
-    /// 取得被觸碰的背景區塊
+  /// 取得被觸碰的背景區塊
   TouchedBackgroundBlock? _getTouchedBackgroundBlock(
     Offset localPosition,
     Size viewSize,
@@ -1483,13 +1483,14 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
   }
 
   /// 獲取圖表座標系統中的 X 值
-  double getChartCoordinateX(double pixelX, Size viewSize, PaintHolder<LineChartData> holder) {
+  double getChartCoordinateX(
+      double pixelX, Size viewSize, PaintHolder<LineChartData> holder,) {
     final data = holder.data;
     final chartUsableSize = holder.getChartUsableSize(viewSize);
-    
+
     final deltaX = data.maxX - data.minX;
     final pixelPerX = chartUsableSize.width / deltaX;
-    
+
     return (pixelX / pixelPerX) + data.minX;
   }
 
@@ -1542,6 +1543,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
 
     return nearestTouchedSpot;
   }
+
   // Get the height of the dot for the given showingTooltipSpots
   double _getDotHeight({
     required Size viewSize,
