@@ -132,6 +132,12 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                           'severity': 'high',
                           'type': 'warning'
                         }, // 可選的自定義資料
+                        iconWidget: const Icon(
+                          Icons.warning,
+                          color: Colors.redAccent, // 保持原生顏色
+                        ),
+                        iconSize: const Size(24, 24),
+                        showIconMinWidth: 30,
                       ),
                       // 測試區塊 2
                       BackgroundBlockData(
@@ -171,6 +177,12 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                           'severity': 'high',
                           'type': 'warning'
                         }, // 可選的自定義資料
+                        iconWidget: const Icon(
+                          Icons.warning,
+                          color: Colors.redAccent, // 保持原生顏色
+                        ),
+                        iconSize: const Size(24, 24),
+                        showIconMinWidth: 60,
                       ),
                       // 測試區塊 7
                       BackgroundBlockData(

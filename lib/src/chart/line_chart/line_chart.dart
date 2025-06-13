@@ -68,6 +68,9 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       transformationConfig: widget.transformationConfig,
       chartBuilder: (context, chartVirtualRect) => Stack(
         children: [
+          // 1. 首先渲染背景區塊的 Widget 圖示（最底層）
+          ..._buildBackgroundBlockIcons(showingData, chartVirtualRect),
+          // 2. 然後渲染圖表主體（線條、點等會在圖示上方）
           LineChartLeaf(
             data: _withTouchedIndicators(
               _lineChartDataTween!.evaluate(animation),
@@ -75,9 +78,10 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
             targetData: _withTouchedIndicators(showingData),
             key: widget.chartRendererKey,
             chartVirtualRect: chartVirtualRect,
-            canBeScaled: widget.transformationConfig.scaleAxis != FlScaleAxis.none,
+            canBeScaled:
+                widget.transformationConfig.scaleAxis != FlScaleAxis.none,
           ),
-          // 顯示背景區塊的 tooltip
+          // 3. 最後顯示背景區塊的 tooltip（最頂層）
           if (_touchedBackgroundBlock != null)
             Positioned.fill(
               child: CustomPaint(
@@ -92,6 +96,33 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
       ),
       data: showingData,
     );
+  }
+
+  /// 建構背景區塊的 Widget 圖示
+  List<Widget> _buildBackgroundBlockIcons(
+    LineChartData data,
+    Rect? chartVirtualRect,
+  ) {
+    final iconWidgets = <Widget>[];
+
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final blockData = data.backgroundBlocks[i];
+
+      if (!blockData.show || blockData.iconWidget == null) {
+        continue;
+      }
+
+      final iconWidget = _BackgroundBlockIconWidget(
+        key: ValueKey('bg_icon_$i'),
+        blockData: blockData,
+        chartData: data,
+        chartVirtualRect: chartVirtualRect,
+      );
+
+      iconWidgets.add(iconWidget);
+    }
+
+    return iconWidgets;
   }
 
   LineChartData _withTouchedIndicators(LineChartData lineChartData) {
@@ -321,14 +352,10 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
     switch (alignment) {
       case FLHorizontalAlignment.left:
         tooltipLeft = touchPoint.dx + horizontalOffset;
-        break;
       case FLHorizontalAlignment.right:
         tooltipLeft = touchPoint.dx - tooltipWidth + horizontalOffset;
-        break;
       case FLHorizontalAlignment.center:
-      default:
         tooltipLeft = touchPoint.dx - tooltipWidth / 2 + horizontalOffset;
-        break;
     }
 
     // 邊界檢查（相對於整個圖表區域）
@@ -423,5 +450,83 @@ class _BackgroundBlockTooltipPainter extends CustomPainter {
             touchedBlock.blockData, oldDelegate.touchedBlock.blockData) ||
         chartData != oldDelegate.chartData ||
         chartVirtualRect != oldDelegate.chartVirtualRect;
+  }
+}
+
+
+// 新增背景區塊圖示 Widget
+
+class _BackgroundBlockIconWidget extends StatelessWidget {
+  const _BackgroundBlockIconWidget({
+    super.key,
+    required this.blockData,
+    required this.chartData,
+    this.chartVirtualRect,
+  });
+
+  final BackgroundBlockData blockData;
+  final LineChartData chartData;
+  final Rect? chartVirtualRect;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 計算區塊在螢幕上的位置
+        final blockStartPixel = _getPixelX(blockData.startX, constraints.biggest);
+        final blockEndPixel = _getPixelX(blockData.endX, constraints.biggest);
+        final blockWidth = blockEndPixel - blockStartPixel;
+        
+        // 檢查是否應該顯示圖示
+        if (blockWidth < blockData.showIconMinWidth) {
+          return const SizedBox.shrink();
+        }
+        
+        // 計算圖示的中心位置
+        final blockCenterX = (blockStartPixel + blockEndPixel) / 2;
+        final blockCenterY = constraints.biggest.height / 2;
+        
+        final iconLeft = blockCenterX - (blockData.iconSize.width / 2);
+        final iconTop = blockCenterY - (blockData.iconSize.height / 2);
+        
+        // 確保圖示在可見範圍內
+        if (iconLeft < 0 || 
+            iconTop < 0 || 
+            iconLeft + blockData.iconSize.width > constraints.biggest.width ||
+            iconTop + blockData.iconSize.height > constraints.biggest.height) {
+          return const SizedBox.shrink();
+        }
+        
+        
+        return Stack(
+          children: [
+            Positioned(
+              left: iconLeft,
+              top: iconTop,
+              width: blockData.iconSize.width,
+              height: blockData.iconSize.height,
+              child: blockData.iconWidget!,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 計算圖表座標對應的像素 X 位置
+  double _getPixelX(double chartX, Size size) {
+    final deltaX = chartData.maxX - chartData.minX;
+    if (deltaX == 0) return 0;
+
+    // 考慮變換後的座標計算
+    if (chartVirtualRect != null) {
+      final virtualWidth = chartVirtualRect!.width;
+      final virtualLeft = chartVirtualRect!.left;
+      final normalizedX = (chartX - chartData.minX) / deltaX;
+      return virtualLeft + (normalizedX * virtualWidth);
+    } else {
+      final pixelPerX = size.width / deltaX;
+      return (chartX - chartData.minX) * pixelPerX;
+    }
   }
 }

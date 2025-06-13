@@ -1406,6 +1406,9 @@ class BackgroundBlockData with EquatableMixin {
   /// [show] 決定是否顯示此區塊
   /// [label] 是區塊的標籤，會顯示在 tooltip 中
   /// [data] 可以存放任意自定義資料，用於 tooltip 回調函式
+  /// [iconWidget] 是要在區塊中心顯示的 Widget 圖示
+  /// [iconSize] 是圖示的尺寸
+  /// [showIconMinWidth] 是顯示圖示所需的最小區塊像素寬度
   BackgroundBlockData({
     required this.startX,
     required this.endX,
@@ -1414,6 +1417,9 @@ class BackgroundBlockData with EquatableMixin {
     this.show = true,
     this.label,
     this.data,
+    this.iconWidget,
+    this.iconSize = const Size(24, 24),
+    this.showIconMinWidth = 60.0,
   }) : color = color ??
             ((color == null && gradient == null)
                 ? Colors.grey.withValues(alpha: 0.2)
@@ -1444,6 +1450,16 @@ class BackgroundBlockData with EquatableMixin {
   /// 自定義資料（可選），可用於 tooltip 顯示
   final Map<String, dynamic>? data;
 
+  /// 要在區塊中心顯示的 Widget 圖示（可選）
+  final Widget? iconWidget;
+
+  /// 圖示的尺寸約束
+  final Size iconSize;
+
+  /// 顯示圖示所需的最小區塊像素寬度
+  /// 當區塊的像素寬度小於此值時，將不會顯示圖示
+  final double showIconMinWidth;
+
   /// 複製當前 [BackgroundBlockData] 並替換提供的值
   BackgroundBlockData copyWith({
     double? startX,
@@ -1453,6 +1469,9 @@ class BackgroundBlockData with EquatableMixin {
     bool? show,
     String? label,
     Map<String, dynamic>? data,
+    Widget? iconWidget,
+    Size? iconSize,
+    double? showIconMinWidth,
   }) =>
       BackgroundBlockData(
         startX: startX ?? this.startX,
@@ -1462,6 +1481,9 @@ class BackgroundBlockData with EquatableMixin {
         show: show ?? this.show,
         label: label ?? this.label,
         data: data ?? this.data,
+        iconWidget: iconWidget ?? this.iconWidget,
+        iconSize: iconSize ?? this.iconSize,
+        showIconMinWidth: showIconMinWidth ?? this.showIconMinWidth,
       );
 
   /// 線性插值
@@ -1478,6 +1500,9 @@ class BackgroundBlockData with EquatableMixin {
         show: b.show,
         label: b.label,
         data: b.data,
+        iconWidget: b.iconWidget, // Widget 不進行插值
+        iconSize: Size.lerp(a.iconSize, b.iconSize, t) ?? b.iconSize,
+        showIconMinWidth: lerpDouble(a.showIconMinWidth, b.showIconMinWidth, t) ?? b.showIconMinWidth,
       );
 
   @override
@@ -1489,6 +1514,9 @@ class BackgroundBlockData with EquatableMixin {
         show,
         label,
         data,
+        iconWidget,
+        iconSize,
+        showIconMinWidth,
       ];
 }
 
@@ -1804,4 +1832,109 @@ class TouchedBackgroundBlock with EquatableMixin {
 
   @override
   int get hashCode => blockIndex.hashCode;
+}
+
+// 新增便利的建構函式和預設值
+
+/// 常用的圖示尺寸常數
+class BackgroundBlockIconSize {
+  /// 小尺寸圖示
+  static const Size small = Size(16, 16);
+  
+  /// 中等尺寸圖示
+  static const Size medium = Size(24, 24);
+  
+  /// 大尺寸圖示
+  static const Size large = Size(32, 32);
+  
+  /// 超大尺寸圖示
+  static const Size extraLarge = Size(48, 48);
+}
+
+/// 預設的最小寬度常數
+class BackgroundBlockMinWidth {
+  /// 顯示小圖示的最小寬度
+  static const double forSmallIcon = 40;
+  
+  /// 顯示中等圖示的最小寬度
+  static const double forMediumIcon = 60;
+  
+  /// 顯示大圖示的最小寬度
+  static const double forLargeIcon = 80;
+  
+  /// 顯示超大圖示的最小寬度
+  static const double forExtraLargeIcon = 100;
+}
+
+/// BackgroundBlockData 的便利建構函式擴展
+extension BackgroundBlockDataExtension on BackgroundBlockData {
+  /// 建立帶有小 Widget 圖示的背景區塊
+  static BackgroundBlockData withSmallIcon({
+    required double startX,
+    required double endX,
+    required Widget iconWidget,
+    Color? color,
+    Gradient? gradient,
+    bool show = true,
+    String? label,
+    Map<String, dynamic>? data,
+  }) =>
+      BackgroundBlockData(
+        startX: startX,
+        endX: endX,
+        color: color,
+        gradient: gradient,
+        show: show,
+        label: label,
+        data: data,
+        iconWidget: iconWidget,
+        iconSize: BackgroundBlockIconSize.small,
+        showIconMinWidth: BackgroundBlockMinWidth.forSmallIcon,
+      );
+
+  /// 建立帶有中等 Widget 圖示的背景區塊
+  static BackgroundBlockData withMediumIcon({
+    required double startX,
+    required double endX,
+    required Widget iconWidget,
+    Color? color,
+    Gradient? gradient,
+    bool show = true,
+    String? label,
+    Map<String, dynamic>? data,
+  }) =>
+      BackgroundBlockData(
+        startX: startX,
+        endX: endX,
+        color: color,
+        gradient: gradient,
+        show: show,
+        label: label,
+        data: data,
+        iconWidget: iconWidget,
+      );
+
+  /// 建立帶有大 Widget 圖示的背景區塊
+  static BackgroundBlockData withLargeIcon({
+    required double startX,
+    required double endX,
+    required Widget iconWidget,
+    Color? color,
+    Gradient? gradient,
+    bool show = true,
+    String? label,
+    Map<String, dynamic>? data,
+  }) =>
+      BackgroundBlockData(
+        startX: startX,
+        endX: endX,
+        color: color,
+        gradient: gradient,
+        show: show,
+        label: label,
+        data: data,
+        iconWidget: iconWidget,
+        iconSize: BackgroundBlockIconSize.large,
+        showIconMinWidth: BackgroundBlockMinWidth.forLargeIcon,
+      );
 }
