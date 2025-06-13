@@ -1,15 +1,18 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/axis_chart_extensions.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/axis_chart_painter.dart';
 import 'package:fl_chart/src/chart/base/base_chart/base_chart_painter.dart';
+import 'package:fl_chart/src/chart/line_chart/widget_image_cache.dart';
 import 'package:fl_chart/src/extensions/paint_extension.dart';
 import 'package:fl_chart/src/extensions/path_extension.dart';
 import 'package:fl_chart/src/extensions/text_align_extension.dart';
 import 'package:fl_chart/src/utils/canvas_wrapper.dart';
 import 'package:fl_chart/src/utils/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Paints [LineChartData] in the canvas, it can be used in a [CustomPainter]
 class LineChartPainter extends AxisChartPainter<LineChartData> {
@@ -79,6 +82,13 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
         )
         ..clipRect(Offset.zero & canvasWrapper.size);
     }
+
+    // 第一層：繪製背景區塊的顏色/漸層（最底層）
+    for (final backgroundBlock in data.backgroundBlocks) {
+      drawBackgroundBlock(canvasWrapper, backgroundBlock, holder);
+    }
+
+    // 第二層：繪製軸線、網格線、邊框
     super.paint(context, canvasWrapper, holder);
     if (data.lineBarsData.isEmpty) {
       return;
@@ -98,11 +108,10 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       clipToBorder(canvasWrapper, holder);
     }
 
-    // 首先繪製背景區塊（在所有其他元素之前）
-    for (final backgroundBlock in data.backgroundBlocks) {
-      drawBackgroundBlock(canvasWrapper, backgroundBlock, holder);
-    }
+    // ✅ 第三層：在這裡加入背景區塊圖示繪製
+    drawBackgroundBlockIcons(context, canvasWrapper, holder);
 
+    // 繼續原有的繪製順序...
     for (final betweenBarsData in data.betweenBarsData) {
       drawBetweenBarsArea(canvasWrapper, data, betweenBarsData, holder);
     }
@@ -114,6 +123,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     final lineIndexDrawingInfo = <LineIndexDrawingInfo>[];
 
     /// draw each line independently on the chart
+    // 第四層：繪製線條和資料點
     for (var i = 0; i < data.lineBarsData.length; i++) {
       final barData = data.lineBarsData[i];
 
@@ -360,6 +370,239 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       drawBarShadow(canvasWrapper, barPath, barData);
       drawBar(canvasWrapper, barPath, barData, holder);
     }
+  }
+
+  /// 穩定的圖片快取（避免縮放時重新建立）
+  static final Map<String, ui.Image> _globalStableCache = {};
+
+  /// 簡化的背景區塊圖示繪製（避免複雜的 Widget 轉換）
+  @visibleForTesting
+  void drawBackgroundBlockIcons(
+    BuildContext context,
+    CanvasWrapper canvasWrapper,
+    PaintHolder<LineChartData> holder,
+  ) {
+    final data = holder.data;
+    final viewSize = canvasWrapper.size;
+
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final blockData = data.backgroundBlocks[i];
+
+      if (!blockData.show || blockData.iconWidget == null) {
+        continue;
+      }
+
+      // 計算區塊在螢幕上的位置
+      final blockStartPixel = getPixelX(blockData.startX, viewSize, holder);
+      final blockEndPixel = getPixelX(blockData.endX, viewSize, holder);
+      final blockWidth = blockEndPixel - blockStartPixel;
+
+      // 檢查是否應該顯示圖示
+      if (blockWidth < blockData.showIconMinWidth) {
+        continue;
+      }
+
+      // 計算圖示的中心位置
+      final blockCenterX = (blockStartPixel + blockEndPixel) / 2;
+      final blockCenterY = viewSize.height / 2;
+
+      final iconLeft = blockCenterX - (blockData.iconSize.width / 2);
+      final iconTop = blockCenterY - (blockData.iconSize.height / 2);
+
+      // 確保圖示在可見範圍內
+      if (iconLeft < -blockData.iconSize.width ||
+          iconTop < -blockData.iconSize.height ||
+          iconLeft > viewSize.width ||
+          iconTop > viewSize.height) {
+        continue;
+      }
+
+      // 建立快取鍵值
+      final cacheKey = _generateCacheKey(blockData, i);
+
+      // 嘗試從快取取得圖片
+      final cachedImage = WidgetImageCache().getCachedImage(cacheKey);
+
+      if (cachedImage != null) {
+        // 如果有快取，直接繪製原始 Widget 的圖片
+        _drawImageStable(
+          canvasWrapper,
+          cachedImage,
+          Offset(iconLeft, iconTop),
+          blockData.iconSize,
+        );
+      } else {
+        // 沒有快取時，先顯示載入中，然後異步建立圖片
+        _drawLoadingPlaceholder(
+          canvasWrapper,
+          Offset(iconLeft, iconTop),
+          blockData.iconSize,
+        );
+
+        // 異步建立真正的 Widget 圖片
+        _createWidgetImageAsync(
+          context,
+          blockData.iconWidget!,
+          blockData.iconSize,
+          cacheKey,
+        );
+      }
+    }
+  }
+
+  /// 產生快取鍵值
+  String _generateCacheKey(BackgroundBlockData blockData, int index) {
+    return 'bg_icon_${index}_${blockData.iconWidget.hashCode}_${blockData.iconSize.width.toInt()}x${blockData.iconSize.height.toInt()}';
+  }
+
+  /// 異步建立 Widget 圖片（修正版本 - 避免 frame 衝突）
+  void _createWidgetImageAsync(
+    BuildContext context,
+    Widget widget,
+    Size size,
+    String cacheKey,
+  ) {
+    // ✅ 避免在繪製過程中直接呼叫異步方法
+    SchedulerBinding.instance.addPostFrameCallback((_) async {
+      if (!context.mounted) return;
+      
+      try {
+        final image = await WidgetImageCache().convertAndCacheWidget(
+          cacheKey,
+          widget,
+          size,
+          context,
+        );
+
+        if (image != null && context.mounted) {
+          // ✅ 延遲觸發重繪，避免 frame 衝突
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              // 找到 LineChart Widget 並觸發重繪
+              final renderObject = context.findRenderObject();
+              if (renderObject != null) {
+                renderObject.markNeedsPaint();
+              }
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('建立 Widget 圖片時發生錯誤: $e');
+      }
+    });
+  }
+
+  /// 穩定的圖片繪製方法
+  void _drawImageStable(
+    CanvasWrapper canvasWrapper,
+    ui.Image image,
+    Offset position,
+    Size targetSize,
+  ) {
+    final paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+
+    final scaleX = targetSize.width / image.width;
+    final scaleY = targetSize.height / image.height;
+
+    canvasWrapper.canvas.save();
+    canvasWrapper.canvas.translate(position.dx, position.dy);
+    canvasWrapper.canvas.scale(scaleX, scaleY);
+    canvasWrapper.canvas.drawImage(image, Offset.zero, paint);
+    canvasWrapper.canvas.restore();
+  }
+
+  /// 繪製載入中佔位符（極簡版本）
+  void _drawLoadingPlaceholder(
+    CanvasWrapper canvasWrapper,
+    Offset position,
+    Size size,
+  ) {
+    // // 繪製一個極淡的圓點，表示載入中
+    // final paint = Paint()
+    //   ..color = Colors.grey.withValues(alpha: 0.3)
+    //   ..style = PaintingStyle.fill;
+
+    // final center = Offset(
+    //   position.dx + size.width / 2,
+    //   position.dy + size.height / 2,
+    // );
+
+    // canvasWrapper.canvas.drawCircle(center, 2.0, paint);
+  }
+
+  /// 清理全域快取（增強版本）
+  static void clearGlobalCache() {
+    debugPrint('🗑️ 開始清理全域快取，目前快取數量: ${_globalStableCache.length}');
+
+    for (final image in _globalStableCache.values) {
+      image.dispose();
+    }
+    _globalStableCache.clear();
+
+    debugPrint('✅ 全域快取清理完成');
+  }
+
+  /// 穩定的圖片繪製方法，避免縮放時的閃爍
+  @visibleForTesting
+  void drawCachedImageStable(
+    CanvasWrapper canvasWrapper,
+    ui.Image image,
+    Offset position,
+    Size targetSize,
+  ) {
+    // 計算縮放比例，使用更穩定的方法
+    final scaleX = targetSize.width / image.width;
+    final scaleY = targetSize.height / image.height;
+
+    final paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+
+    canvasWrapper.canvas.save();
+
+    // 移動到目標位置並縮放
+    canvasWrapper.canvas.translate(position.dx, position.dy);
+    canvasWrapper.canvas.scale(scaleX, scaleY);
+
+    // 繪製圖片
+    canvasWrapper.canvas.drawImage(image, Offset.zero, paint);
+
+    canvasWrapper.canvas.restore();
+  }
+
+  /// 繪製快取的圖片到 Canvas
+  @visibleForTesting
+  void drawCachedImage(
+    CanvasWrapper canvasWrapper,
+    ui.Image image,
+    Offset position,
+    Size targetSize,
+  ) {
+    debugPrint('繪製圖片到位置: $position，目標尺寸: $targetSize');
+
+    // 計算縮放比例
+    final scaleX = targetSize.width / image.width;
+    final scaleY = targetSize.height / image.height;
+
+    debugPrint('縮放比例: scaleX=$scaleX, scaleY=$scaleY');
+
+    final paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+
+    canvasWrapper.canvas.save();
+    
+    // 移動到目標位置並縮放
+    canvasWrapper.canvas.translate(position.dx, position.dy);
+    canvasWrapper.canvas.scale(scaleX, scaleY);
+    
+    // 繪製圖片
+    canvasWrapper.canvas.drawImage(image, Offset.zero, paint);
+    
+    canvasWrapper.canvas.restore();
+    debugPrint('圖片繪製完成');
   }
 
   @visibleForTesting

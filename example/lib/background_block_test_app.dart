@@ -1,6 +1,7 @@
 // 更新測試應用程式來驗證新的優先級邏輯
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class BackgroundBlockTestApp extends StatefulWidget {
   const BackgroundBlockTestApp({super.key});
@@ -177,10 +178,7 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                           'severity': 'high',
                           'type': 'warning'
                         }, // 可選的自定義資料
-                        iconWidget: const Icon(
-                          Icons.warning,
-                          color: Colors.redAccent, // 保持原生顏色
-                        ),
+                        iconWidget: SvgPicture.asset('assets/icons/infinity_icon.svg'),
                         iconSize: const Size(24, 24),
                         showIconMinWidth: 60,
                       ),
@@ -286,7 +284,7 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                       show: true,
                       drawVerticalLine: true,
                       drawHorizontalLine: true,
-                      horizontalInterval: 2, // 較大的間隔避免效能問題
+                      horizontalInterval: 1, // 較大的間隔避免效能問題
                       verticalInterval: 4, // 較大的間隔避免效能問題
                       getDrawingHorizontalLine: (value) {
                         return FlLine(
