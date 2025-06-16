@@ -1,6 +1,7 @@
 // 更新測試應用程式來驗證新的優先級邏輯
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_svg/svg.dart';
 
 class BackgroundBlockTestApp extends StatefulWidget {
   const BackgroundBlockTestApp({super.key});
@@ -121,6 +122,32 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                         dotData: const FlDotData(show: true),
                       ),
                     ],
+                    // 客製化軸線
+                    customAxisLines: const CustomAxisLinesData(
+                      horizontalLines: [
+                        // 在 Y = 5 的位置繪製紅色實線
+                        CustomHorizontalLine(
+                          y: 5,
+                          color: Colors.green,
+                          strokeWidth: 2,
+                        ),
+                        // 在 Y = 10 的位置繪製藍色虛線
+                        CustomHorizontalLine(
+                          y: 10,
+                          color: Colors.blue,
+                          strokeWidth: 1,
+                          dashArray: [5, 5],
+                        ),
+                      ],
+                      verticalLines: [
+                        // 在 X = 3 的位置繪製綠色實線
+                        CustomVerticalLine(
+                          x: 3,
+                          color: Colors.green,
+                          strokeWidth: 2,
+                        ),
+                      ],
+                    ),
                     backgroundBlocks: [
                       // 測試區塊 1
                       BackgroundBlockData(
@@ -177,10 +204,7 @@ class _BackgroundBlockTestAppState extends State<BackgroundBlockTestApp> {
                           'severity': 'high',
                           'type': 'warning'
                         }, // 可選的自定義資料
-                        iconWidget: const Icon(
-                          Icons.warning,
-                          color: Colors.redAccent, // 保持原生顏色
-                        ),
+                        iconWidget: SvgPicture.asset('assets/icons/ic_pie_chart.svg', color: Colors.red,),
                         iconSize: const Size(24, 24),
                         showIconMinWidth: 60,
                       ),

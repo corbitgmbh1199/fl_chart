@@ -8,6 +8,7 @@ export 'src/chart/base/base_chart/base_chart_data.dart';
 export 'src/chart/base/base_chart/fl_touch_event.dart';
 export 'src/chart/candlestick_chart/candlestick_chart.dart';
 export 'src/chart/candlestick_chart/candlestick_chart_data.dart';
+export 'src/chart/line_chart/custom_axis_line/custom_axis_lines_data.dart';
 export 'src/chart/line_chart/line_chart.dart';
 export 'src/chart/line_chart/line_chart_data.dart';
 export 'src/chart/pie_chart/pie_chart.dart';
@@ -16,3 +17,4 @@ export 'src/chart/radar_chart/radar_chart.dart';
 export 'src/chart/radar_chart/radar_chart_data.dart';
 export 'src/chart/scatter_chart/scatter_chart.dart';
 export 'src/chart/scatter_chart/scatter_chart_data.dart';
+

@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:equatable/equatable.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:fl_chart/src/chart/line_chart/custom_axis_line/custom_axis_lines_data.dart';
 import 'package:fl_chart/src/extensions/color_extension.dart';
 import 'package:fl_chart/src/extensions/gradient_extension.dart';
 import 'package:fl_chart/src/utils/lerp.dart';
@@ -44,6 +45,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
     this.lineBarsData = const [],
     this.betweenBarsData = const [],
     this.backgroundBlocks = const [],
+    this.customAxisLines = const CustomAxisLinesData(), 
     super.titlesData = const FlTitlesData(),
     super.extraLinesData = const ExtraLinesData(),
     this.lineTouchData = const LineTouchData(),
@@ -75,6 +77,9 @@ class LineChartData extends AxisChartData with EquatableMixin {
 
   /// 背景區塊清單
   final List<BackgroundBlockData> backgroundBlocks;
+
+  /// 客製化軸線資料
+  final CustomAxisLinesData customAxisLines;
 
   /// Handles touch behaviors and responses.
   final LineTouchData lineTouchData;
@@ -113,6 +118,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
             lerpBetweenBarsDataList(a.betweenBarsData, b.betweenBarsData, t)!,
         backgroundBlocks: _lerpBackgroundBlockDataList(
             a.backgroundBlocks, b.backgroundBlocks, t,),
+        customAxisLines: CustomAxisLinesData.lerp(a.customAxisLines, b.customAxisLines, t),
         lineTouchData: b.lineTouchData,
         showingTooltipIndicators: b.showingTooltipIndicators,
         rotationQuarterTurns: b.rotationQuarterTurns,
@@ -144,6 +150,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
     List<LineChartBarData>? lineBarsData,
     List<BetweenBarsData>? betweenBarsData,
     List<BackgroundBlockData>? backgroundBlocks,
+    CustomAxisLinesData? customAxisLines,
     FlTitlesData? titlesData,
     RangeAnnotations? rangeAnnotations,
     ExtraLinesData? extraLinesData,
@@ -165,6 +172,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
         lineBarsData: lineBarsData ?? this.lineBarsData,
         betweenBarsData: betweenBarsData ?? this.betweenBarsData,
         backgroundBlocks: backgroundBlocks ?? this.backgroundBlocks,
+        customAxisLines: customAxisLines ?? this.customAxisLines,
         titlesData: titlesData ?? this.titlesData,
         rangeAnnotations: rangeAnnotations ?? this.rangeAnnotations,
         extraLinesData: extraLinesData ?? this.extraLinesData,
@@ -190,6 +198,7 @@ class LineChartData extends AxisChartData with EquatableMixin {
         lineBarsData,
         betweenBarsData,
         backgroundBlocks,
+        customAxisLines,
         titlesData,
         extraLinesData,
         lineTouchData,
