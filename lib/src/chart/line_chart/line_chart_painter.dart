@@ -1140,7 +1140,96 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       ..transparentIfWidthIsZero();
 
     barPath = barPath.toDashedPath(barData.dashArray);
-    canvasWrapper.drawPath(barPath, _barPaint);
+    
+    // 如果啟用端點圓角遮罩，使用裁剪路徑
+    if (barData.enableEndCapsMask && barData.spots.isNotEmpty) {
+      _drawBarWithEndCapsMask(
+        canvasWrapper,
+        barPath,
+        barData,
+        holder,
+        viewSize,
+      );
+    } else {
+      canvasWrapper.drawPath(barPath, _barPaint);
+    }
+  }
+
+  /// 繪製帶有端點圓角遮罩的線條
+  void _drawBarWithEndCapsMask(
+    CanvasWrapper canvasWrapper,
+    Path barPath,
+    LineChartBarData barData,
+    PaintHolder<LineChartData> holder,
+    Size viewSize,
+  ) {
+    // 建立裁剪路徑
+    final clipPath = _createEndCapsMaskPath(barData, holder, viewSize);
+
+    // 儲存當前畫布狀態
+    canvasWrapper
+      ..save()
+      // 應用裁剪路徑
+      ..clipPath(clipPath)
+      // 繪製線條
+      ..drawPath(barPath, _barPaint)
+      // 恢復畫布狀態
+      ..restore();
+  }
+
+  /// 建立端點圓角遮罩路徑
+  Path _createEndCapsMaskPath(
+    LineChartBarData barData,
+    PaintHolder<LineChartData> holder,
+    Size viewSize,
+  ) {
+    if (barData.spots.isEmpty) {
+      return Path();
+    }
+
+    final radius = barData.actualEndCapsRadius;
+    final halfBarWidth = barData.barWidth / 2;
+
+    // 取得第一個和最後一個點的像素座標
+    final firstSpot = barData.spots.first;
+    final lastSpot = barData.spots.last;
+
+    final firstPixel = Offset(
+      getPixelX(firstSpot.x, viewSize, holder),
+      getPixelY(firstSpot.y, viewSize, holder),
+    );
+
+    final lastPixel = Offset(
+      getPixelX(lastSpot.x, viewSize, holder),
+      getPixelY(lastSpot.y, viewSize, holder),
+    );
+
+    final path = Path();
+
+    // 建立覆蓋整個線條區域的形狀
+    final lineRect = Rect.fromLTRB(
+      firstPixel.dx,
+      firstPixel.dy - halfBarWidth - 1,
+      lastPixel.dx,
+      firstPixel.dy + halfBarWidth + 1,
+    );
+
+    // 根據設定決定哪些角要是圓角
+    final leftRadius = barData.enableLeftEndCap ? radius : 0.0;
+    final rightRadius = barData.enableRightEndCap ? radius : 0.0;
+
+    // 建立有選擇性圓角的矩形路徑
+    final rrect = RRect.fromRectAndCorners(
+      lineRect,
+      topLeft: Radius.circular(leftRadius),
+      bottomLeft: Radius.circular(leftRadius),
+      topRight: Radius.circular(rightRadius),
+      bottomRight: Radius.circular(rightRadius),
+    );
+
+    path.addRRect(rrect);
+
+    return path;
   }
 
   @visibleForTesting

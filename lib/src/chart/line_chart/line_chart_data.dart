@@ -3,7 +3,6 @@ import 'dart:ui';
 
 import 'package:equatable/equatable.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:fl_chart/src/chart/line_chart/custom_axis_line/custom_axis_lines_data.dart';
 import 'package:fl_chart/src/extensions/color_extension.dart';
 import 'package:fl_chart/src/extensions/gradient_extension.dart';
 import 'package:fl_chart/src/utils/lerp.dart';
@@ -283,6 +282,11 @@ class LineChartBarData with EquatableMixin {
     this.shadow = const Shadow(color: Colors.transparent),
     this.isStepLineChart = false,
     this.lineChartStepData = const LineChartStepData(),
+    // 新增圓角遮罩相關屬性
+    this.enableEndCapsMask = false,
+    this.endCapsRadius,
+    this.enableLeftEndCap = true,
+    this.enableRightEndCap = true,
   })  : color =
             color ?? ((color == null && gradient == null) ? Colors.cyan : null),
         belowBarData = belowBarData ?? BarAreaData(),
@@ -409,6 +413,21 @@ class LineChartBarData with EquatableMixin {
   /// Holds data for representing a Step Line Chart, and works only if [isStepChart] is true.
   final LineChartStepData lineChartStepData;
 
+  /// 是否啟用線條端點的圓角遮罩效果
+  final bool enableEndCapsMask;
+
+  /// 線條端點的圓角半徑，如果為 null 則使用 barWidth 的一半
+  final double? endCapsRadius;
+
+  /// 是否啟用左端點圓角
+  final bool enableLeftEndCap;
+
+  /// 是否啟用右端點圓角
+  final bool enableRightEndCap;
+
+  /// 取得實際的端點圓角半徑
+  double get actualEndCapsRadius => endCapsRadius ?? (barWidth / 2);
+
   /// Lerps a [LineChartBarData] based on [t] value, check [Tween.lerp].
   static LineChartBarData lerp(
     LineChartBarData a,
@@ -445,6 +464,10 @@ class LineChartBarData with EquatableMixin {
         isStepLineChart: b.isStepLineChart,
         lineChartStepData:
             LineChartStepData.lerp(a.lineChartStepData, b.lineChartStepData, t),
+        enableEndCapsMask: b.enableEndCapsMask,
+        endCapsRadius: lerpDouble(a.endCapsRadius, b.endCapsRadius, t),
+        enableLeftEndCap: b.enableLeftEndCap,
+        enableRightEndCap: b.enableRightEndCap,
       );
 
   /// Copies current [LineChartBarData] to a new [LineChartBarData],
@@ -471,6 +494,10 @@ class LineChartBarData with EquatableMixin {
     Shadow? shadow,
     bool? isStepLineChart,
     LineChartStepData? lineChartStepData,
+    bool? enableEndCapsMask,
+    double? endCapsRadius,
+    bool? enableLeftEndCap,
+    bool? enableRightEndCap,
   }) =>
       LineChartBarData(
         spots: spots ?? this.spots,
@@ -495,6 +522,10 @@ class LineChartBarData with EquatableMixin {
         shadow: shadow ?? this.shadow,
         isStepLineChart: isStepLineChart ?? this.isStepLineChart,
         lineChartStepData: lineChartStepData ?? this.lineChartStepData,
+        enableEndCapsMask: enableEndCapsMask ?? this.enableEndCapsMask,
+        endCapsRadius: endCapsRadius ?? this.endCapsRadius,
+        enableLeftEndCap: enableLeftEndCap ?? this.enableLeftEndCap,
+        enableRightEndCap: enableRightEndCap ?? this.enableRightEndCap,
       );
 
   /// Used for equality check, see [EquatableMixin].
@@ -520,6 +551,10 @@ class LineChartBarData with EquatableMixin {
         shadow,
         isStepLineChart,
         lineChartStepData,
+        enableEndCapsMask,
+        endCapsRadius,
+        enableLeftEndCap,
+        enableRightEndCap,
       ];
 }
 
