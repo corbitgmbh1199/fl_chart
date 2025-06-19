@@ -3,6 +3,9 @@ import 'package:fl_chart/src/chart/base/axis_chart/scale_axis.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/transformation_config.dart';
 import 'package:fl_chart/src/chart/base/base_chart/base_chart_data.dart';
 import 'package:fl_chart/src/chart/base/base_chart/fl_touch_event.dart';
+import 'package:fl_chart/src/chart/line_chart/background_block/background_block_icon_widget.dart';
+import 'package:fl_chart/src/chart/line_chart/background_block/background_block_tooltip_painter.dart';
+import 'package:fl_chart/src/chart/line_chart/custom_axis_line/custom_axis_lines_painter.dart';
 import 'package:fl_chart/src/chart/line_chart/line_chart_data.dart';
 import 'package:fl_chart/src/chart/line_chart/line_chart_helper.dart';
 import 'package:fl_chart/src/chart/line_chart/line_chart_renderer.dart';
@@ -53,25 +56,87 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
 
   final Map<int, List<int>> _showingTouchedIndicators = {};
 
+  TouchedBackgroundBlock? _touchedBackgroundBlock;
+
   final _lineChartHelper = LineChartHelper();
+
+  int? _lastTouchedBlockIndex;
 
   @override
   Widget build(BuildContext context) {
+
     final showingData = _getData();
 
     return AxisChartScaffoldWidget(
       transformationConfig: widget.transformationConfig,
-      chartBuilder: (context, chartVirtualRect) => LineChartLeaf(
-        data: _withTouchedIndicators(
-          _lineChartDataTween!.evaluate(animation),
-        ),
-        targetData: _withTouchedIndicators(showingData),
-        key: widget.chartRendererKey,
-        chartVirtualRect: chartVirtualRect,
-        canBeScaled: widget.transformationConfig.scaleAxis != FlScaleAxis.none,
+      chartBuilder: (context, chartVirtualRect) => Stack(
+        children: [
+          // 1. 最底層：客製化軸線（比BackgroundBlock還要下面）
+          if (showingData.customAxisLines.show)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: CustomAxisLinesPainter(
+                  customAxisLinesData: showingData.customAxisLines,
+                  chartData: showingData,
+                  chartVirtualRect: chartVirtualRect,
+                ),
+              ),
+            ),
+          // 2. 然後渲染背景區塊的 Widget 圖示（軸線上方）
+          ..._buildBackgroundBlockIcons(showingData, chartVirtualRect),
+          // 2. 接著渲染圖表主體（線條、點等會在圖示上方）
+          LineChartLeaf(
+            data: _withTouchedIndicators(
+              _lineChartDataTween!.evaluate(animation),
+            ),
+            targetData: _withTouchedIndicators(showingData),
+            key: widget.chartRendererKey,
+            chartVirtualRect: chartVirtualRect,
+            canBeScaled:
+                widget.transformationConfig.scaleAxis != FlScaleAxis.none,
+          ),
+          // 4. 最後顯示背景區塊的 tooltip（最頂層）
+          if (_touchedBackgroundBlock != null)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: BackgroundBlockTooltipPainter(
+                  touchedBlock: _touchedBackgroundBlock!,
+                  chartData: showingData,
+                  chartVirtualRect: chartVirtualRect,
+                ),
+              ),
+            ),
+        ],
       ),
       data: showingData,
     );
+  }
+
+  /// 建構背景區塊的 Widget 圖示
+  List<Widget> _buildBackgroundBlockIcons(
+    LineChartData data,
+    Rect? chartVirtualRect,
+  ) {
+    final iconWidgets = <Widget>[];
+
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final blockData = data.backgroundBlocks[i];
+
+      if (!blockData.show || blockData.iconWidget == null) {
+        continue;
+      }
+
+      final iconWidget = BackgroundBlockIconWidget(
+        key: ValueKey('bg_icon_$i'),
+        blockData: blockData,
+        chartData: data,
+        chartVirtualRect: chartVirtualRect,
+      );
+
+      iconWidgets.add(iconWidget);
+    }
+
+    return iconWidgets;
   }
 
   LineChartData _withTouchedIndicators(LineChartData lineChartData) {
@@ -123,6 +188,7 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
     return newData;
   }
 
+  // 修正 _handleBuiltInTouch 方法，確保 spots tooltip 優先顯示
   void _handleBuiltInTouch(
     FlTouchEvent event,
     LineTouchResponse? touchResponse,
@@ -130,33 +196,71 @@ class _LineChartState extends AnimatedWidgetBaseState<LineChart> {
     if (!mounted) {
       return;
     }
+
     _providedTouchCallback?.call(event, touchResponse);
 
-    if (!event.isInterestedForInteractions ||
-        touchResponse?.lineBarSpots == null ||
-        touchResponse!.lineBarSpots!.isEmpty) {
+    if (!event.isInterestedForInteractions) {
       setState(() {
         _showingTouchedTooltips.clear();
         _showingTouchedIndicators.clear();
+        _touchedBackgroundBlock = null;
+        _lastTouchedBlockIndex = null;
       });
       return;
     }
 
-    setState(() {
-      final sortedLineSpots = List.of(touchResponse.lineBarSpots!)
-        ..sort((spot1, spot2) => spot2.y.compareTo(spot1.y));
+    // 優先處理線條觸碰（spots tooltip 優先）
+    if (touchResponse?.lineBarSpots != null &&
+        touchResponse!.lineBarSpots!.isNotEmpty) {
+      setState(() {
+        _touchedBackgroundBlock = null;
+        _lastTouchedBlockIndex = null;
 
-      _showingTouchedIndicators.clear();
-      for (var i = 0; i < touchResponse.lineBarSpots!.length; i++) {
-        final touchedBarSpot = touchResponse.lineBarSpots![i];
-        final barPos = touchedBarSpot.barIndex;
-        _showingTouchedIndicators[barPos] = [touchedBarSpot.spotIndex];
+        final sortedLineSpots = List.of(touchResponse.lineBarSpots!)
+          ..sort((spot1, spot2) => spot2.y.compareTo(spot1.y));
+
+        _showingTouchedIndicators.clear();
+        for (var i = 0; i < touchResponse.lineBarSpots!.length; i++) {
+          final touchedBarSpot = touchResponse.lineBarSpots![i];
+          final barPos = touchedBarSpot.barIndex;
+          _showingTouchedIndicators[barPos] = [touchedBarSpot.spotIndex];
+        }
+
+        _showingTouchedTooltips
+          ..clear()
+          ..add(ShowingTooltipIndicators(sortedLineSpots));
+      });
+      return;
+    }
+
+    // 只有在沒有線條觸碰時才處理背景區塊觸碰
+    final newBackgroundBlock = touchResponse?.touchedBackgroundBlock;
+    if (newBackgroundBlock != null) {
+      final newBlockIndex = newBackgroundBlock.blockIndex;
+
+      if (_lastTouchedBlockIndex != newBlockIndex) {
+        setState(() {
+          _touchedBackgroundBlock = newBackgroundBlock;
+          _showingTouchedTooltips.clear();
+          _showingTouchedIndicators.clear();
+          _lastTouchedBlockIndex = newBlockIndex;
+        });
+      } else {
       }
+      return;
+    }
 
-      _showingTouchedTooltips
-        ..clear()
-        ..add(ShowingTooltipIndicators(sortedLineSpots));
-    });
+    // 清除所有狀態
+    if (_touchedBackgroundBlock != null ||
+        _showingTouchedTooltips.isNotEmpty ||
+        _showingTouchedIndicators.isNotEmpty) {
+      setState(() {
+        _showingTouchedTooltips.clear();
+        _showingTouchedIndicators.clear();
+        _touchedBackgroundBlock = null;
+        _lastTouchedBlockIndex = null;
+      });
+    }
   }
 
   @override

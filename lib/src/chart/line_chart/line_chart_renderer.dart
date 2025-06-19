@@ -121,21 +121,101 @@ class RenderLineChart extends RenderBaseChart<LineTouchResponse> {
     canvas.restore();
   }
 
+  // 修正 getResponseAtLocation 方法，讓 spots 優先於背景區塊
   @override
   LineTouchResponse getResponseAtLocation(Offset localPosition) {
-    final chartSize = mockTestSize ?? size;
+    final data = targetData;
+    if (!data.lineTouchData.enabled) {
+      return LineTouchResponse(
+        touchLocation: localPosition,
+        touchChartCoordinate: localPosition,
+      );
+    }
+
+    final size = mockTestSize ?? this.size;
+
+    // 優先檢查線條觸碰（spots 的 tooltip 優先）
+    final touchedSpots =
+        painter.handleTouch(localPosition, size, paintHolder);
+
+    // 只有在沒有觸碰到線條時才檢查背景區塊
+    TouchedBackgroundBlock? touchedBackgroundBlock;
+    if (touchedSpots == null || touchedSpots.isEmpty) {
+
+      touchedBackgroundBlock = _getTouchedBackgroundBlockWithTransform(
+        localPosition,
+        size,
+        paintHolder,
+      );
+    } else {
+
+    }
+
     return LineTouchResponse(
       touchLocation: localPosition,
-      touchChartCoordinate: painter.getChartCoordinateFromPixel(
-        localPosition,
-        chartSize,
-        paintHolder,
-      ),
-      lineBarSpots: painter.handleTouch(
-        localPosition,
-        chartSize,
-        paintHolder,
-      ),
+      touchChartCoordinate: localPosition,
+      lineBarSpots: touchedSpots,
+      touchedBackgroundBlock: touchedBackgroundBlock,
     );
+  }
+
+  /// 考慮變換的背景區塊觸碰檢測
+  TouchedBackgroundBlock? _getTouchedBackgroundBlockWithTransform(
+    Offset localPosition,
+    Size size,
+    PaintHolder<LineChartData> holder,
+  ) {
+    final data = holder.data;
+
+    // 檢查觸碰位置是否在有效範圍內
+    if (localPosition.dx < 0 ||
+        localPosition.dy < 0 ||
+        localPosition.dx > size.width ||
+        localPosition.dy > size.height) {
+      return null;
+    }
+
+    // 計算圖表座標
+    double touchX;
+    if (holder.chartVirtualRect != null) {
+      // 縮放模式下的座標轉換
+      final virtualRect = holder.chartVirtualRect!;
+      final normalizedX =
+          (localPosition.dx - virtualRect.left) / virtualRect.width;
+      touchX = data.minX + (normalizedX * (data.maxX - data.minX));
+    } else {
+      // 正常模式下的座標轉換
+      final chartViewSize = holder.getChartUsableSize(size);
+      final deltaX = data.maxX - data.minX;
+      if (deltaX == 0) {
+        return null;
+      }
+      final pixelPerX = chartViewSize.width / deltaX;
+      touchX = (localPosition.dx / pixelPerX) + data.minX;
+    }
+
+
+    // 檢查背景區塊
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final block = data.backgroundBlocks[i];
+
+      // 只檢查是否顯示，不再檢查個別的 tooltipData
+      if (!block.show) continue;
+
+      if (touchX >= block.startX && touchX <= block.endX) {
+        return TouchedBackgroundBlock(
+          blockData: block,
+          blockIndex: i,
+          touchX: touchX,
+          // 傳遞圖表範圍資訊以便對齊計算
+          chartMinX: data.minX,
+          chartMaxX: data.maxX,
+          chartMinY: data.minY,
+          chartMaxY: data.maxY,
+        );
+      }
+    }
+
+    return null;
   }
 }

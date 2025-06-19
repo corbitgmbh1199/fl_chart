@@ -1,3 +1,4 @@
+import 'package:fl_chart_app/background_block_test_app.dart';
 import 'package:fl_chart_app/cubits/app/app_cubit.dart';
 import 'package:fl_chart_app/presentation/resources/app_resources.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'presentation/router/app_router.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(BackgroundBlockTestApp());
 }
 
 class MyApp extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:equatable/equatable.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:fl_chart/src/chart/line_chart/custom_axis_line/custom_axis_lines_data.dart';
 import 'package:fl_chart/src/extensions/color_extension.dart';
 import 'package:fl_chart/src/extensions/gradient_extension.dart';
 import 'package:fl_chart/src/utils/lerp.dart';
@@ -43,6 +44,8 @@ class LineChartData extends AxisChartData with EquatableMixin {
   LineChartData({
     this.lineBarsData = const [],
     this.betweenBarsData = const [],
+    this.backgroundBlocks = const [],
+    this.customAxisLines = const CustomAxisLinesData(), 
     super.titlesData = const FlTitlesData(),
     super.extraLinesData = const ExtraLinesData(),
     this.lineTouchData = const LineTouchData(),
@@ -71,6 +74,12 @@ class LineChartData extends AxisChartData with EquatableMixin {
 
   /// Fills area between two [LineChartBarData] with a color or gradient.
   final List<BetweenBarsData> betweenBarsData;
+
+  /// 背景區塊清單
+  final List<BackgroundBlockData> backgroundBlocks;
+
+  /// 客製化軸線資料
+  final CustomAxisLinesData customAxisLines;
 
   /// Handles touch behaviors and responses.
   final LineTouchData lineTouchData;
@@ -107,6 +116,9 @@ class LineChartData extends AxisChartData with EquatableMixin {
             lerpLineChartBarDataList(a.lineBarsData, b.lineBarsData, t)!,
         betweenBarsData:
             lerpBetweenBarsDataList(a.betweenBarsData, b.betweenBarsData, t)!,
+        backgroundBlocks: _lerpBackgroundBlockDataList(
+            a.backgroundBlocks, b.backgroundBlocks, t,),
+        customAxisLines: CustomAxisLinesData.lerp(a.customAxisLines, b.customAxisLines, t),
         lineTouchData: b.lineTouchData,
         showingTooltipIndicators: b.showingTooltipIndicators,
         rotationQuarterTurns: b.rotationQuarterTurns,
@@ -116,11 +128,29 @@ class LineChartData extends AxisChartData with EquatableMixin {
     }
   }
 
+  /// 背景區塊清單的線性插值函式
+  static List<BackgroundBlockData> _lerpBackgroundBlockDataList(
+    List<BackgroundBlockData> a,
+    List<BackgroundBlockData> b,
+    double t,
+  ) {
+    if (a.length != b.length) {
+      return b; // 如果長度不同，直接回傳目標清單
+    }
+
+    return List.generate(
+      b.length,
+      (index) => BackgroundBlockData.lerp(a[index], b[index], t),
+    );
+  }
+
   /// Copies current [LineChartData] to a new [LineChartData],
   /// and replaces provided values.
   LineChartData copyWith({
     List<LineChartBarData>? lineBarsData,
     List<BetweenBarsData>? betweenBarsData,
+    List<BackgroundBlockData>? backgroundBlocks,
+    CustomAxisLinesData? customAxisLines,
     FlTitlesData? titlesData,
     RangeAnnotations? rangeAnnotations,
     ExtraLinesData? extraLinesData,
@@ -141,6 +171,8 @@ class LineChartData extends AxisChartData with EquatableMixin {
       LineChartData(
         lineBarsData: lineBarsData ?? this.lineBarsData,
         betweenBarsData: betweenBarsData ?? this.betweenBarsData,
+        backgroundBlocks: backgroundBlocks ?? this.backgroundBlocks,
+        customAxisLines: customAxisLines ?? this.customAxisLines,
         titlesData: titlesData ?? this.titlesData,
         rangeAnnotations: rangeAnnotations ?? this.rangeAnnotations,
         extraLinesData: extraLinesData ?? this.extraLinesData,
@@ -165,6 +197,8 @@ class LineChartData extends AxisChartData with EquatableMixin {
   List<Object?> get props => [
         lineBarsData,
         betweenBarsData,
+        backgroundBlocks,
+        customAxisLines,
         titlesData,
         extraLinesData,
         lineTouchData,
@@ -876,12 +910,15 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
   /// You can customize this tooltip using [touchTooltipData], indicator lines starts from position
   /// controlled by [getTouchLineStart] and ends at position controlled by [getTouchLineEnd].
   /// If you need to have a distance threshold for handling touches, use [touchSpotThreshold].
+  /// 
+  /// [backgroundBlockTooltipData] sets the appearance and behavior of background block tooltips.
   const LineTouchData({
     bool enabled = true,
     BaseTouchCallback<LineTouchResponse>? touchCallback,
     MouseCursorResolver<LineTouchResponse>? mouseCursorResolver,
     Duration? longPressDuration,
     this.touchTooltipData = const LineTouchTooltipData(),
+    this.backgroundBlockTooltipData = const BackgroundBlockTooltipData(),
     this.getTouchedSpotIndicator = defaultTouchedIndicators,
     this.touchSpotThreshold = 10,
     this.distanceCalculator = _xDistance,
@@ -897,6 +934,9 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
 
   /// Configs of how touch tooltip popup.
   final LineTouchTooltipData touchTooltipData;
+
+  /// Configs of how background block tooltip popup appears.
+  final BackgroundBlockTooltipData backgroundBlockTooltipData;
 
   /// Configs of how touch indicator looks like.
   final GetTouchedSpotIndicator getTouchedSpotIndicator;
@@ -927,6 +967,7 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
     MouseCursorResolver<LineTouchResponse>? mouseCursorResolver,
     Duration? longPressDuration,
     LineTouchTooltipData? touchTooltipData,
+    BackgroundBlockTooltipData? backgroundBlockTooltipData,
     GetTouchedSpotIndicator? getTouchedSpotIndicator,
     double? touchSpotThreshold,
     CalculateTouchDistance? distanceCalculator,
@@ -940,6 +981,7 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
         mouseCursorResolver: mouseCursorResolver ?? this.mouseCursorResolver,
         longPressDuration: longPressDuration ?? this.longPressDuration,
         touchTooltipData: touchTooltipData ?? this.touchTooltipData,
+        backgroundBlockTooltipData: backgroundBlockTooltipData ?? this.backgroundBlockTooltipData,
         getTouchedSpotIndicator:
             getTouchedSpotIndicator ?? this.getTouchedSpotIndicator,
         touchSpotThreshold: touchSpotThreshold ?? this.touchSpotThreshold,
@@ -957,6 +999,7 @@ class LineTouchData extends FlTouchData<LineTouchResponse> with EquatableMixin {
         mouseCursorResolver,
         longPressDuration,
         touchTooltipData,
+        backgroundBlockTooltipData,
         getTouchedSpotIndicator,
         touchSpotThreshold,
         distanceCalculator,
@@ -1299,11 +1342,15 @@ class LineTouchResponse extends AxisBaseTouchResponse {
     required super.touchLocation,
     required super.touchChartCoordinate,
     this.lineBarSpots,
+    this.touchedBackgroundBlock,
   });
 
   /// touch happened on these spots
   /// (if a single line provided on the chart, [lineBarSpots]'s length will be 1 always)
   final List<TouchLineBarSpot>? lineBarSpots;
+
+  /// 被觸碰的背景區塊
+  final TouchedBackgroundBlock? touchedBackgroundBlock;
 
   /// Copies current [LineTouchResponse] to a new [LineTouchResponse],
   /// and replaces provided values.
@@ -1311,11 +1358,13 @@ class LineTouchResponse extends AxisBaseTouchResponse {
     Offset? touchLocation,
     Offset? touchChartCoordinate,
     List<TouchLineBarSpot>? lineBarSpots,
+    TouchedBackgroundBlock? touchedBackgroundBlock,
   }) =>
       LineTouchResponse(
         touchLocation: touchLocation ?? this.touchLocation,
         touchChartCoordinate: touchChartCoordinate ?? this.touchChartCoordinate,
         lineBarSpots: lineBarSpots ?? this.lineBarSpots,
+        touchedBackgroundBlock: touchedBackgroundBlock ?? this.touchedBackgroundBlock,
       );
 }
 
@@ -1352,4 +1401,549 @@ class LineChartDataTween extends Tween<LineChartData> {
   /// Lerps a [LineChartData] based on [t] value, check [Tween.lerp].
   @override
   LineChartData lerp(double t) => begin!.lerp(begin!, end!, t);
+}
+
+// 簡化 BackgroundBlockData 類別
+
+/// 定義背景區塊資料
+class BackgroundBlockData with EquatableMixin {
+  /// 建立背景區塊
+  /// [startX] 是區塊的起始 X 座標
+  /// [endX] 是區塊的結束 X 座標
+  /// [color] 是區塊的顏色，如果同時提供 [gradient] 則會拋出例外
+  /// [gradient] 是區塊的漸層色彩，如果同時提供 [color] 則會拋出例外
+  /// [show] 決定是否顯示此區塊
+  /// [label] 是區塊的標籤，會顯示在 tooltip 中
+  /// [data] 可以存放任意自定義資料，用於 tooltip 回調函式
+  /// [iconWidget] 是要在區塊中心顯示的 Widget 圖示
+  /// [iconSize] 是圖示的尺寸
+  /// [showIconMinWidth] 是顯示圖示所需的最小區塊像素寬度
+  BackgroundBlockData({
+    required this.startX,
+    required this.endX,
+    Color? color,
+    this.gradient,
+    this.show = true,
+    this.label,
+    this.data,
+    this.iconWidget,
+    this.iconSize = const Size(24, 24),
+    this.showIconMinWidth = 60.0,
+  }) : color = color ??
+            ((color == null && gradient == null)
+                ? Colors.grey.withValues(alpha: 0.2)
+                : null) {
+    if (color != null && gradient != null) {
+      throw ArgumentError('不能同時提供 color 和 gradient');
+    }
+  }
+
+  /// 區塊的起始 X 座標
+  final double startX;
+
+  /// 區塊的結束 X 座標
+  final double endX;
+
+  /// 區塊的顏色
+  final Color? color;
+
+  /// 區塊的漸層色彩
+  final Gradient? gradient;
+
+  /// 是否顯示區塊
+  final bool show;
+
+  /// 區塊的標籤（可選）
+  final String? label;
+
+  /// 自定義資料（可選），可用於 tooltip 顯示
+  final Map<String, dynamic>? data;
+
+  /// 要在區塊中心顯示的 Widget 圖示（可選）
+  final Widget? iconWidget;
+
+  /// 圖示的尺寸約束
+  final Size iconSize;
+
+  /// 顯示圖示所需的最小區塊像素寬度
+  /// 當區塊的像素寬度小於此值時，將不會顯示圖示
+  final double showIconMinWidth;
+
+  /// 複製當前 [BackgroundBlockData] 並替換提供的值
+  BackgroundBlockData copyWith({
+    double? startX,
+    double? endX,
+    Color? color,
+    Gradient? gradient,
+    bool? show,
+    String? label,
+    Map<String, dynamic>? data,
+    Widget? iconWidget,
+    Size? iconSize,
+    double? showIconMinWidth,
+  }) =>
+      BackgroundBlockData(
+        startX: startX ?? this.startX,
+        endX: endX ?? this.endX,
+        color: color ?? this.color,
+        gradient: gradient ?? this.gradient,
+        show: show ?? this.show,
+        label: label ?? this.label,
+        data: data ?? this.data,
+        iconWidget: iconWidget ?? this.iconWidget,
+        iconSize: iconSize ?? this.iconSize,
+        showIconMinWidth: showIconMinWidth ?? this.showIconMinWidth,
+      );
+
+  /// 線性插值
+  static BackgroundBlockData lerp(
+    BackgroundBlockData a,
+    BackgroundBlockData b,
+    double t,
+  ) =>
+      BackgroundBlockData(
+        startX: lerpDouble(a.startX, b.startX, t) ?? 0,
+        endX: lerpDouble(a.endX, b.endX, t) ?? 0,
+        color: Color.lerp(a.color, b.color, t),
+        gradient: Gradient.lerp(a.gradient, b.gradient, t),
+        show: b.show,
+        label: b.label,
+        data: b.data,
+        iconWidget: b.iconWidget, // Widget 不進行插值
+        iconSize: Size.lerp(a.iconSize, b.iconSize, t) ?? b.iconSize,
+        showIconMinWidth: lerpDouble(a.showIconMinWidth, b.showIconMinWidth, t) ?? b.showIconMinWidth,
+      );
+
+  @override
+  List<Object?> get props => [
+        startX,
+        endX,
+        color,
+        gradient,
+        show,
+        label,
+        data,
+        iconWidget,
+        iconSize,
+        showIconMinWidth,
+      ];
+}
+
+/// 提供動態 tooltip 對齊方式的回調函式類型
+typedef GetTooltipAlignment = FLHorizontalAlignment Function(
+  TouchedBackgroundBlock touchedBlock,
+  Size chartSize,
+);
+
+/// 提供動態 tooltip 水平偏移的回調函式類型
+typedef GetTooltipHorizontalOffset = double Function(
+  TouchedBackgroundBlock touchedBlock,
+  Size chartSize,
+);
+
+/// 背景區塊的 tooltip 資料
+class BackgroundBlockTooltipData with EquatableMixin {
+  /// 建立背景區塊的 tooltip 資料
+  const BackgroundBlockTooltipData({
+    this.getTooltipItems = defaultBackgroundBlockTooltipItem,
+    this.getTooltipColor = defaultBackgroundBlockTooltipColor,
+    this.getTooltipAlignment,
+    this.getTooltipHorizontalOffset,
+    BorderRadius? tooltipBorderRadius,
+    this.tooltipPadding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    this.tooltipMargin = 16,
+    this.tooltipHorizontalAlignment = FLHorizontalAlignment.center,
+    this.tooltipHorizontalOffset = 0,
+    this.maxContentWidth = 200,
+    this.fitInsideHorizontally = true,
+    this.fitInsideVertically = true,
+    this.showOnTopOfTheChartBoxArea = true,
+    this.rotateAngle = 0.0,
+    this.tooltipBorder = BorderSide.none,
+  }) : _tooltipBorderRadius = tooltipBorderRadius;
+
+  /// 取得 tooltip 項目的回調函式
+  final GetBackgroundBlockTooltipItems getTooltipItems;
+
+  /// 取得 tooltip 背景顏色的回調函式
+  final GetBackgroundBlockTooltipColor getTooltipColor;
+
+  /// 動態取得 tooltip 水平對齊方式的回調函式（優先於 tooltipHorizontalAlignment）
+  final GetTooltipAlignment? getTooltipAlignment;
+
+  /// 動態取得 tooltip 水平偏移的回調函式（優先於 tooltipHorizontalOffset）
+  final GetTooltipHorizontalOffset? getTooltipHorizontalOffset;
+
+  /// 設定 tooltip 的圓角半徑
+  final BorderRadius? _tooltipBorderRadius;
+
+  /// 取得 tooltip 的圓角半徑
+  BorderRadius get tooltipBorderRadius =>
+      _tooltipBorderRadius ?? BorderRadius.circular(4);
+
+  /// tooltip 內部的邊距
+  final EdgeInsets tooltipPadding;
+
+  /// tooltip 與觸碰點的距離
+  final double tooltipMargin;
+
+  /// tooltip 水平對齊方式
+  final FLHorizontalAlignment tooltipHorizontalAlignment;
+
+  /// tooltip 水平偏移量
+  final double tooltipHorizontalOffset;
+
+  /// tooltip 最大寬度
+  final double maxContentWidth;
+
+  /// 是否強制 tooltip 保持在水平邊界內
+  final bool fitInsideHorizontally;
+
+  /// 是否強制 tooltip 保持在垂直邊界內
+  final bool fitInsideVertically;
+
+  /// 是否將 tooltip 顯示在圖表區域頂部
+  final bool showOnTopOfTheChartBoxArea;
+
+  /// tooltip 旋轉角度
+  final double rotateAngle;
+
+  /// tooltip 邊框樣式
+  final BorderSide tooltipBorder;
+
+  /// 複製並替換指定值
+  BackgroundBlockTooltipData copyWith({
+    GetBackgroundBlockTooltipItems? getTooltipItems,
+    GetBackgroundBlockTooltipColor? getTooltipColor,
+    GetTooltipAlignment? getTooltipAlignment,
+    GetTooltipHorizontalOffset? getTooltipHorizontalOffset,
+    BorderRadius? tooltipBorderRadius,
+    EdgeInsets? tooltipPadding,
+    double? tooltipMargin,
+    FLHorizontalAlignment? tooltipHorizontalAlignment,
+    double? tooltipHorizontalOffset,
+    double? maxContentWidth,
+    bool? fitInsideHorizontally,
+    bool? fitInsideVertically,
+    bool? showOnTopOfTheChartBoxArea,
+    double? rotateAngle,
+    BorderSide? tooltipBorder,
+  }) =>
+      BackgroundBlockTooltipData(
+        getTooltipItems: getTooltipItems ?? this.getTooltipItems,
+        getTooltipColor: getTooltipColor ?? this.getTooltipColor,
+        getTooltipAlignment: getTooltipAlignment ?? this.getTooltipAlignment,
+        getTooltipHorizontalOffset: getTooltipHorizontalOffset ?? this.getTooltipHorizontalOffset,
+        tooltipBorderRadius: tooltipBorderRadius ?? _tooltipBorderRadius,
+        tooltipPadding: tooltipPadding ?? this.tooltipPadding,
+        tooltipMargin: tooltipMargin ?? this.tooltipMargin,
+        tooltipHorizontalAlignment: tooltipHorizontalAlignment ?? this.tooltipHorizontalAlignment,
+        tooltipHorizontalOffset: tooltipHorizontalOffset ?? this.tooltipHorizontalOffset,
+        maxContentWidth: maxContentWidth ?? this.maxContentWidth,
+        fitInsideHorizontally: fitInsideHorizontally ?? this.fitInsideHorizontally,
+        fitInsideVertically: fitInsideVertically ?? this.fitInsideVertically,
+        showOnTopOfTheChartBoxArea: showOnTopOfTheChartBoxArea ?? this.showOnTopOfTheChartBoxArea,
+        rotateAngle: rotateAngle ?? this.rotateAngle,
+        tooltipBorder: tooltipBorder ?? this.tooltipBorder,
+      );
+
+  /// 線性插值
+  static BackgroundBlockTooltipData? lerp(
+    BackgroundBlockTooltipData? a,
+    BackgroundBlockTooltipData? b,
+    double t,
+  ) {
+    if (a == null && b == null) return null;
+    if (a == null) return b;
+    if (b == null) return a;
+
+    return BackgroundBlockTooltipData(
+      getTooltipItems: b.getTooltipItems,
+      getTooltipColor: b.getTooltipColor,
+      getTooltipAlignment: b.getTooltipAlignment,
+      getTooltipHorizontalOffset: b.getTooltipHorizontalOffset,
+      tooltipBorderRadius: BorderRadius.lerp(a._tooltipBorderRadius, b._tooltipBorderRadius, t),
+      tooltipPadding: EdgeInsets.lerp(a.tooltipPadding, b.tooltipPadding, t) ?? b.tooltipPadding,
+      tooltipMargin: lerpDouble(a.tooltipMargin, b.tooltipMargin, t) ?? b.tooltipMargin,
+      tooltipHorizontalAlignment: b.tooltipHorizontalAlignment,
+      tooltipHorizontalOffset: lerpDouble(a.tooltipHorizontalOffset, b.tooltipHorizontalOffset, t) ?? b.tooltipHorizontalOffset,
+      maxContentWidth: lerpDouble(a.maxContentWidth, b.maxContentWidth, t) ?? b.maxContentWidth,
+      fitInsideHorizontally: b.fitInsideHorizontally,
+      fitInsideVertically: b.fitInsideVertically,
+      showOnTopOfTheChartBoxArea: b.showOnTopOfTheChartBoxArea,
+      rotateAngle: lerpDouble(a.rotateAngle, b.rotateAngle, t) ?? b.rotateAngle,
+      tooltipBorder: BorderSide.lerp(a.tooltipBorder, b.tooltipBorder, t),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        getTooltipItems,
+        getTooltipColor,
+        getTooltipAlignment,
+        getTooltipHorizontalOffset,
+        _tooltipBorderRadius,
+        tooltipPadding,
+        tooltipMargin,
+        tooltipHorizontalAlignment,
+        tooltipHorizontalOffset,
+        maxContentWidth,
+        fitInsideHorizontally,
+        fitInsideVertically,
+        showOnTopOfTheChartBoxArea,
+        rotateAngle,
+        tooltipBorder,
+      ];
+}
+
+/// 提供背景區塊 tooltip 項目的回調函式類型
+typedef GetBackgroundBlockTooltipItems = List<BackgroundBlockTooltipItem?> Function(
+  TouchedBackgroundBlock touchedBlock,
+);
+
+/// 提供背景區塊 tooltip 背景顏色的回調函式類型
+typedef GetBackgroundBlockTooltipColor = Color Function(
+  TouchedBackgroundBlock touchedBlock,
+);
+
+/// 預設的背景區塊 tooltip 項目實作
+List<BackgroundBlockTooltipItem> defaultBackgroundBlockTooltipItem(
+  TouchedBackgroundBlock touchedBlock,
+) {
+  final blockData = touchedBlock.blockData;
+
+  // 優先使用標籤，如果沒有標籤則使用座標範圍
+  String text;
+  if (blockData.label != null && blockData.label!.isNotEmpty) {
+    text = blockData.label!;
+  } else {
+    text =
+        '${blockData.startX.toStringAsFixed(1)} - ${blockData.endX.toStringAsFixed(1)}';
+  }
+
+  return [
+    BackgroundBlockTooltipItem(
+      text,
+      const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  ];
+}
+
+/// 預設的背景區塊 tooltip 背景顏色實作
+Color defaultBackgroundBlockTooltipColor(TouchedBackgroundBlock touchedBlock) {
+  final blockData = touchedBlock.blockData;
+  
+  // 根據區塊顏色自動決定 tooltip 背景色
+  if (blockData.color != null) {
+    // 使用區塊顏色的深色版本
+    return blockData.color!.withValues(alpha: 0.9);
+  } else if (blockData.gradient != null && blockData.gradient!.colors.isNotEmpty) {
+    // 使用漸層第一個顏色的深色版本
+    return blockData.gradient!.colors.first.withValues(alpha: 0.9);
+  }
+  
+  return Colors.black87;
+}
+
+/// 背景區塊 tooltip 項目資料
+class BackgroundBlockTooltipItem with EquatableMixin {
+  /// 建立背景區塊 tooltip 項目
+  const BackgroundBlockTooltipItem(
+    this.text,
+    this.textStyle, {
+    this.textAlign = TextAlign.center,
+    this.textDirection = TextDirection.ltr,
+    this.children,
+  });
+
+  /// 顯示的文字
+  final String text;
+
+  /// 文字樣式
+  final TextStyle textStyle;
+
+  /// 文字對齊方式
+  final TextAlign textAlign;
+
+  /// 文字方向
+  final TextDirection textDirection;
+
+  /// 額外的文字樣式和格式
+  final List<TextSpan>? children;
+
+  @override
+  List<Object?> get props => [
+        text,
+        textStyle,
+        textAlign,
+        textDirection,
+        children,
+      ];
+}
+
+/// 被觸碰的背景區塊資訊
+class TouchedBackgroundBlock with EquatableMixin {
+  /// 建立被觸碰的背景區塊資訊
+  const TouchedBackgroundBlock({
+    required this.blockData,
+    required this.blockIndex,
+    required this.touchX,
+    this.chartMinX,
+    this.chartMaxX,
+    this.chartMinY,
+    this.chartMaxY,
+  });
+
+  /// 被觸碰的背景區塊資料
+  final BackgroundBlockData blockData;
+
+  /// 區塊在清單中的索引
+  final int blockIndex;
+
+  /// 觸碰的 X 座標
+  final double touchX;
+
+  /// 圖表的最小 X 值（可選，用於更精確的對齊計算）
+  final double? chartMinX;
+
+  /// 圖表的最大 X 值（可選，用於更精確的對齊計算）
+  final double? chartMaxX;
+
+  /// 圖表的最小 Y 值（可選）
+  final double? chartMinY;
+
+  /// 圖表的最大 Y 值（可選）
+  final double? chartMaxY;
+
+  /// 計算觸碰點在圖表中的相對位置（0.0 到 1.0）
+  double? get relativePositionX {
+    if (chartMinX == null || chartMaxX == null) return null;
+    final range = chartMaxX! - chartMinX!;
+    if (range == 0) return 0.5;
+    return (touchX - chartMinX!) / range;
+  }
+
+  @override
+  List<Object?> get props => [blockIndex]; // 只比較 blockIndex，忽略 touchX 的變化
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! TouchedBackgroundBlock) return false;
+    
+    // 只比較區塊索引，避免因為 touchX 微小變化造成閃爍
+    return blockIndex == other.blockIndex;
+  }
+
+  @override
+  int get hashCode => blockIndex.hashCode;
+}
+
+// 新增便利的建構函式和預設值
+
+/// 常用的圖示尺寸常數
+class BackgroundBlockIconSize {
+  /// 小尺寸圖示
+  static const Size small = Size(16, 16);
+  
+  /// 中等尺寸圖示
+  static const Size medium = Size(24, 24);
+  
+  /// 大尺寸圖示
+  static const Size large = Size(32, 32);
+  
+  /// 超大尺寸圖示
+  static const Size extraLarge = Size(48, 48);
+}
+
+/// 預設的最小寬度常數
+class BackgroundBlockMinWidth {
+  /// 顯示小圖示的最小寬度
+  static const double forSmallIcon = 40;
+  
+  /// 顯示中等圖示的最小寬度
+  static const double forMediumIcon = 60;
+  
+  /// 顯示大圖示的最小寬度
+  static const double forLargeIcon = 80;
+  
+  /// 顯示超大圖示的最小寬度
+  static const double forExtraLargeIcon = 100;
+}
+
+/// BackgroundBlockData 的便利建構函式擴展
+extension BackgroundBlockDataExtension on BackgroundBlockData {
+  /// 建立帶有小 Widget 圖示的背景區塊
+  static BackgroundBlockData withSmallIcon({
+    required double startX,
+    required double endX,
+    required Widget iconWidget,
+    Color? color,
+    Gradient? gradient,
+    bool show = true,
+    String? label,
+    Map<String, dynamic>? data,
+  }) =>
+      BackgroundBlockData(
+        startX: startX,
+        endX: endX,
+        color: color,
+        gradient: gradient,
+        show: show,
+        label: label,
+        data: data,
+        iconWidget: iconWidget,
+        iconSize: BackgroundBlockIconSize.small,
+        showIconMinWidth: BackgroundBlockMinWidth.forSmallIcon,
+      );
+
+  /// 建立帶有中等 Widget 圖示的背景區塊
+  static BackgroundBlockData withMediumIcon({
+    required double startX,
+    required double endX,
+    required Widget iconWidget,
+    Color? color,
+    Gradient? gradient,
+    bool show = true,
+    String? label,
+    Map<String, dynamic>? data,
+  }) =>
+      BackgroundBlockData(
+        startX: startX,
+        endX: endX,
+        color: color,
+        gradient: gradient,
+        show: show,
+        label: label,
+        data: data,
+        iconWidget: iconWidget,
+      );
+
+  /// 建立帶有大 Widget 圖示的背景區塊
+  static BackgroundBlockData withLargeIcon({
+    required double startX,
+    required double endX,
+    required Widget iconWidget,
+    Color? color,
+    Gradient? gradient,
+    bool show = true,
+    String? label,
+    Map<String, dynamic>? data,
+  }) =>
+      BackgroundBlockData(
+        startX: startX,
+        endX: endX,
+        color: color,
+        gradient: gradient,
+        show: show,
+        label: label,
+        data: data,
+        iconWidget: iconWidget,
+        iconSize: BackgroundBlockIconSize.large,
+        showIconMinWidth: BackgroundBlockMinWidth.forLargeIcon,
+      );
 }

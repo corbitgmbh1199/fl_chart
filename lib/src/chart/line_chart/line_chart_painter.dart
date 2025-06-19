@@ -13,14 +13,7 @@ import 'package:flutter/material.dart';
 
 /// Paints [LineChartData] in the canvas, it can be used in a [CustomPainter]
 class LineChartPainter extends AxisChartPainter<LineChartData> {
-  /// Paints [dataList] into canvas, it is the animating [LineChartData],
-  /// [targetData] is the animation's target and remains the same
-  /// during animation, then we should use it  when we need to show
-  /// tooltips or something like that, because [dataList] is changing constantly.
-  ///
-  /// [textScale] used for scaling texts inside the chart,
-  /// parent can use [MediaQuery.textScaleFactor] to respect
-  /// the system's font size.
+
   LineChartPainter() : super() {
     _barPaint = Paint()..style = PaintingStyle.stroke;
 
@@ -47,7 +40,19 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       ..strokeWidth = 1.0;
 
     _clipPaint = Paint();
+    _backgroundBlockPaint = Paint()..style = PaintingStyle.fill;
   }
+  /// Paints [dataList] into canvas, it is the animating [LineChartData],
+  /// [targetData] is the animation's target and remains the same
+  /// during animation, then we should use it  when we need to show
+  /// tooltips or something like that, because [dataList] is changing constantly.
+  ///
+  /// [textScale] used for scaling texts inside the chart,
+  /// parent can use [MediaQuery.textScaleFactor] to respect
+  /// the system's font size.
+  ///
+
+  late Paint _backgroundBlockPaint;
 
   late Paint _barPaint;
   late Paint _barAreaPaint;
@@ -91,6 +96,11 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       );
 
       clipToBorder(canvasWrapper, holder);
+    }
+
+    // 首先繪製背景區塊（在所有其他元素之前）
+    for (final backgroundBlock in data.backgroundBlocks) {
+      drawBackgroundBlock(canvasWrapper, backgroundBlock, holder);
     }
 
     for (final betweenBarsData in data.betweenBarsData) {
@@ -182,6 +192,9 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       }
       tooltipSpots = ShowingTooltipIndicators(barSpots);
 
+      // 最後繪製背景區塊的 tooltip（在所有其他元素之後）
+      drawBackgroundBlockTooltips(canvasWrapper, data, holder);
+
       drawTouchTooltip(
         context,
         canvasWrapper,
@@ -191,6 +204,70 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
         holder,
       );
     }
+  }
+
+  // 修正 drawBackgroundBlock 方法以支援變換
+  /// 繪製背景區塊
+  @visibleForTesting
+  void drawBackgroundBlock(
+    CanvasWrapper canvasWrapper,
+    BackgroundBlockData blockData,
+    PaintHolder<LineChartData> holder,
+  ) {
+    if (!blockData.show) {
+      return;
+    }
+
+    final viewSize = canvasWrapper.size;
+
+    // 考慮變換後的座標計算
+    final leftX = getPixelX(blockData.startX, viewSize, holder);
+    final rightX = getPixelX(blockData.endX, viewSize, holder);
+
+    // 如果有虛擬矩形，需要調整 Y 座標範圍
+    double topY;
+    double bottomY;
+    if (holder.chartVirtualRect != null) {
+      // 在縮放模式下，背景區塊應該覆蓋整個可見區域
+      topY = holder.chartVirtualRect!.top;
+      bottomY = holder.chartVirtualRect!.bottom;
+    } else {
+      // 正常模式下覆蓋整個圖表高度
+      topY = 0.0;
+      bottomY = viewSize.height;
+    }
+
+    final rect = Rect.fromLTRB(leftX, topY, rightX, bottomY);
+
+    // 只有當矩形在可見範圍內時才繪製
+    final visibleRect = Offset.zero & viewSize;
+    if (!rect.overlaps(visibleRect)) {
+      return;
+    }
+
+    _backgroundBlockPaint.setColorOrGradient(
+      blockData.color,
+      blockData.gradient,
+      rect,
+    );
+
+    canvasWrapper.drawRect(rect, _backgroundBlockPaint);
+  }
+
+  /// 繪製背景區塊的 tooltip
+  @visibleForTesting
+  void drawBackgroundBlockTooltips(
+    CanvasWrapper canvasWrapper,
+    LineChartData data,
+    PaintHolder<LineChartData> holder,
+  ) {
+    if (!data.lineTouchData.enabled) {
+      return;
+    }
+
+    // 檢查是否有被觸碰的背景區塊需要顯示 tooltip
+    // 這個資訊會通過 LineChart 的狀態管理傳遞
+    // 暫時先不實作繪製邏輯，讓 Widget 層處理
   }
 
   @visibleForTesting
@@ -1341,6 +1418,18 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       return null;
     }
 
+    // 檢查是否觸碰到背景區塊
+    final touchedBackgroundBlock = _getTouchedBackgroundBlock(
+      localPosition,
+      viewSize,
+      holder,
+    );
+
+    if (touchedBackgroundBlock != null) {
+      // 如果觸碰到背景區塊且有 tooltip，顯示背景區塊的 tooltip
+      // 這裡需要在 LineTouchResponse 中處理
+    }
+
     /// it holds list of nearest touched spots of each line
     /// and we use it to draw touch stuff on them
     final touchedSpots = <TouchLineBarSpot>[];
@@ -1368,7 +1457,46 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     return touchedSpots.isEmpty ? null : touchedSpots;
   }
 
+  /// 取得被觸碰的背景區塊
+  TouchedBackgroundBlock? _getTouchedBackgroundBlock(
+    Offset localPosition,
+    Size viewSize,
+    PaintHolder<LineChartData> holder,
+  ) {
+    final data = holder.data;
+    final touchX = getChartCoordinateX(localPosition.dx, viewSize, holder);
+
+    for (var i = 0; i < data.backgroundBlocks.length; i++) {
+      final block = data.backgroundBlocks[i];
+      if (!block.show) continue;
+
+      if (touchX >= block.startX && touchX <= block.endX) {
+        return TouchedBackgroundBlock(
+          blockData: block,
+          blockIndex: i,
+          touchX: touchX,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// 獲取圖表座標系統中的 X 值
+  double getChartCoordinateX(
+      double pixelX, Size viewSize, PaintHolder<LineChartData> holder,) {
+    final data = holder.data;
+    final chartUsableSize = holder.getChartUsableSize(viewSize);
+
+    final deltaX = data.maxX - data.minX;
+    final pixelPerX = chartUsableSize.width / deltaX;
+
+    return (pixelX / pixelPerX) + data.minX;
+  }
+
   /// find the nearest spot base on the touched offset
+  // 修正 getNearestTouchedSpot 方法
+  /// 根據觸碰偏移量尋找最近的點
   @visibleForTesting
   TouchLineBarSpot? getNearestTouchedSpot(
     Size viewSize,
@@ -1382,11 +1510,14 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       return null;
     }
 
-    /// Find the nearest spot (based on distanceCalculator)
-    final sortedSpots = <FlSpot>[];
-    double? smallestDistance;
-    for (final spot in barData.spots) {
+    /// 根據 distanceCalculator 尋找最近的點
+    TouchLineBarSpot? nearestTouchedSpot;
+    double? nearestDistance;
+
+    for (var i = 0; i < barData.spots.length; i++) {
+      final spot = barData.spots[i];
       if (spot.isNull()) continue;
+
       final distance = data.lineTouchData.distanceCalculator(
         touchedPoint,
         Offset(
@@ -1396,27 +1527,21 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       );
 
       if (distance <= data.lineTouchData.touchSpotThreshold) {
-        smallestDistance ??= distance;
+        if (nearestDistance == null || distance < nearestDistance) {
+          nearestDistance = distance;
 
-        if (distance < smallestDistance) {
-          sortedSpots.insert(0, spot);
-          smallestDistance = distance;
-        } else {
-          sortedSpots.add(spot);
+          // TouchLineBarSpot 建構函式需要 4 個參數：bar, barIndex, spot, distance
+          nearestTouchedSpot = TouchLineBarSpot(
+            barData, // LineChartBarData: super.bar
+            barDataPosition, // int: super.barIndex
+            spot, // FlSpot: super.spot
+            distance, // double: this.distance
+          );
         }
       }
     }
 
-    if (sortedSpots.isNotEmpty) {
-      return TouchLineBarSpot(
-        barData,
-        barDataPosition,
-        sortedSpots.first,
-        smallestDistance!,
-      );
-    } else {
-      return null;
-    }
+    return nearestTouchedSpot;
   }
 
   // Get the height of the dot for the given showingTooltipSpots
