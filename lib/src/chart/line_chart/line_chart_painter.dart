@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:fl_chart/src/chart/base/axis_chart/axis_chart_extensions.dart';
@@ -13,7 +14,6 @@ import 'package:flutter/material.dart';
 
 /// Paints [LineChartData] in the canvas, it can be used in a [CustomPainter]
 class LineChartPainter extends AxisChartPainter<LineChartData> {
-
   LineChartPainter() : super() {
     _barPaint = Paint()..style = PaintingStyle.stroke;
 
@@ -42,6 +42,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     _clipPaint = Paint();
     _backgroundBlockPaint = Paint()..style = PaintingStyle.fill;
   }
+
   /// Paints [dataList] into canvas, it is the animating [LineChartData],
   /// [targetData] is the animation's target and remains the same
   /// during animation, then we should use it  when we need to show
@@ -64,6 +65,8 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
   late Paint _clipPaint;
 
   /// Paints [LineChartData] into the provided canvas.
+  /// 繪製 [LineChartData] 到畫布中
+  /// 繪製 [LineChartData] 到畫布中
   @override
   void paint(
     BuildContext context,
@@ -71,6 +74,8 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     PaintHolder<LineChartData> holder,
   ) {
     final data = holder.data;
+    final viewSize = canvasWrapper.size;
+
     if (holder.chartVirtualRect != null) {
       canvasWrapper
         ..saveLayer(
@@ -79,7 +84,9 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
         )
         ..clipRect(Offset.zero & canvasWrapper.size);
     }
+
     super.paint(context, canvasWrapper, holder);
+
     if (data.lineBarsData.isEmpty) {
       return;
     }
@@ -98,7 +105,7 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       clipToBorder(canvasWrapper, holder);
     }
 
-    // 首先繪製背景區塊（在所有其他元素之前）
+    // 首先繪製背景區塊
     for (final backgroundBlock in data.backgroundBlocks) {
       drawBackgroundBlock(canvasWrapper, backgroundBlock, holder);
     }
@@ -107,47 +114,69 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       drawBetweenBarsArea(canvasWrapper, data, betweenBarsData, holder);
     }
 
-    if (!data.extraLinesData.extraLinesOnTop) {
-      super.drawExtraLines(context, canvasWrapper, holder);
-    }
+    // 檢查是否需要整體圓角
+    final needsUnifiedRounding =
+        data.lineBarsData.any((bar) => bar.enableEndCapsMask);
 
-    final lineIndexDrawingInfo = <LineIndexDrawingInfo>[];
-
-    /// draw each line independently on the chart
-    for (var i = 0; i < data.lineBarsData.length; i++) {
-      final barData = data.lineBarsData[i];
-
-      if (!barData.show) {
-        continue;
-      }
-
-      drawBarLine(canvasWrapper, barData, holder);
-      drawDots(canvasWrapper, barData, holder);
-
-      if (data.extraLinesData.extraLinesOnTop) {
+    if (needsUnifiedRounding) {
+      // 先繪製不在頂層的 extralines（在圓角背景之前）
+      if (!data.extraLinesData.extraLinesOnTop) {
         super.drawExtraLines(context, canvasWrapper, holder);
       }
 
+      // 然後繪製統一圓角背景
+      _drawUnifiedRoundedBackground(canvasWrapper, data, holder, viewSize);
+
+      // 如果 extralines 要在頂層，在圓角背景之後繪製
+      if (data.extraLinesData.extraLinesOnTop) {
+        super.drawExtraLines(context, canvasWrapper, holder);
+      }
+    } else {
+      // 正常模式：先繪製不在頂層的 extralines
+      if (!data.extraLinesData.extraLinesOnTop) {
+        super.drawExtraLines(context, canvasWrapper, holder);
+      }
+
+      // 正常繪製每條線段
+      _drawAllLineBars(canvasWrapper, data, holder);
+    }
+
+    // 處理指示器和其他元素
+    final lineIndexDrawingInfo = <LineIndexDrawingInfo>[];
+
+    for (var i = 0; i < data.lineBarsData.length; i++) {
+      final barData = data.lineBarsData[i];
+      if (!barData.show) continue;
+
+      // 如果不是統一圓角模式，在這裡繪製線條
+      if (!needsUnifiedRounding) {
+        drawBarLine(canvasWrapper, barData, holder);
+      }
+
+      drawDots(canvasWrapper, barData, holder);
+
+      // 在正常模式下，如果 extralines 要在頂層，在每條線段後繪製
+      if (!needsUnifiedRounding && data.extraLinesData.extraLinesOnTop) {
+        super.drawExtraLines(context, canvasWrapper, holder);
+      }
+
+      // 處理指示器
       final indicatorsData = data.lineTouchData
           .getTouchedSpotIndicator(barData, barData.showingIndicators);
 
       if (indicatorsData.length != barData.showingIndicators.length) {
         throw Exception(
-          'indicatorsData and touchedSpotOffsets size should be same',
-        );
+            'indicatorsData and touchedSpotOffsets size should be same');
       }
 
       for (var j = 0; j < barData.showingIndicators.length; j++) {
         final indicatorData = indicatorsData[j];
         final index = barData.showingIndicators[j];
-        if (index < 0 || index >= barData.spots.length) {
-          continue;
-        }
-        final spot = barData.spots[index];
+        if (index < 0 || index >= barData.spots.length) continue;
 
-        if (indicatorData == null) {
-          continue;
-        }
+        final spot = barData.spots[index];
+        if (indicatorData == null) continue;
+
         lineIndexDrawingInfo.add(
           LineIndexDrawingInfo(barData, i, spot, index, indicatorData),
         );
@@ -160,29 +189,19 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       canvasWrapper.restore();
     }
 
-    // Draw error indicators
+    // 繪製錯誤指示器
     for (var i = 0; i < data.lineBarsData.length; i++) {
       final barData = data.lineBarsData[i];
-
-      if (!barData.show) {
-        continue;
-      }
-
-      drawErrorIndicatorData(
-        canvasWrapper,
-        barData,
-        holder,
-      );
+      if (!barData.show) continue;
+      drawErrorIndicatorData(canvasWrapper, barData, holder);
     }
 
-    // Draw touch tooltip on most top spot
+    // 繪製 tooltip
     for (var i = 0; i < data.showingTooltipIndicators.length; i++) {
       var tooltipSpots = data.showingTooltipIndicators[i];
-
       final showingBarSpots = tooltipSpots.showingSpots;
-      if (showingBarSpots.isEmpty) {
-        continue;
-      }
+      if (showingBarSpots.isEmpty) continue;
+
       final barSpots = List<LineBarSpot>.of(showingBarSpots);
       FlSpot topSpot = barSpots[0];
       for (final barSpot in barSpots) {
@@ -192,17 +211,143 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       }
       tooltipSpots = ShowingTooltipIndicators(barSpots);
 
-      // 最後繪製背景區塊的 tooltip（在所有其他元素之後）
       drawBackgroundBlockTooltips(canvasWrapper, data, holder);
+      drawTouchTooltip(context, canvasWrapper,
+          data.lineTouchData.touchTooltipData, topSpot, tooltipSpots, holder);
+    }
+  }
 
-      drawTouchTooltip(
-        context,
-        canvasWrapper,
-        data.lineTouchData.touchTooltipData,
-        topSpot,
-        tooltipSpots,
-        holder,
-      );
+  /// 繪製統一圓角背景
+  void _drawUnifiedRoundedBackground(
+    CanvasWrapper canvasWrapper,
+    LineChartData data,
+    PaintHolder<LineChartData> holder,
+    Size viewSize,
+  ) {
+    // 找到所有線條的整體邊界
+    double? minX;
+    double? maxX;
+    double? maxBarWidth;
+    double? radius;
+
+    final activeLineBars = data.lineBarsData.where((bar) => bar.show).toList();
+    if (activeLineBars.isEmpty) return;
+
+    for (final barData in activeLineBars) {
+      if (barData.spots.isEmpty) continue;
+
+      final firstX = barData.spots.first.x;
+      final lastX = barData.spots.last.x;
+
+      minX = minX == null ? firstX : math.min(minX, firstX);
+      maxX = maxX == null ? lastX : math.max(maxX, lastX);
+      maxBarWidth = maxBarWidth == null
+          ? barData.barWidth
+          : math.max(maxBarWidth, barData.barWidth);
+
+      if (barData.enableEndCapsMask) {
+        radius = radius == null
+            ? barData.actualEndCapsRadius
+            : math.max(radius, barData.actualEndCapsRadius);
+      }
+    }
+
+    if (minX == null || maxX == null || maxBarWidth == null || radius == null) {
+      return;
+    }
+
+    // 轉換為像素座標
+    final leftPixel = getPixelX(minX, viewSize, holder);
+    final rightPixel = getPixelX(maxX, viewSize, holder);
+    final centerY = getPixelY(0.5, viewSize, holder); // 假設所有線條在 Y=0.5
+
+    final halfBarWidth = maxBarWidth / 2;
+
+    // 建立統一的圓角矩形
+    final unifiedRect = Rect.fromLTRB(
+      leftPixel,
+      centerY - halfBarWidth,
+      rightPixel,
+      centerY + halfBarWidth,
+    );
+
+    final rrect = RRect.fromRectAndCorners(
+      unifiedRect,
+      topLeft: Radius.circular(radius),
+      bottomLeft: Radius.circular(radius),
+      topRight: Radius.circular(radius),
+      bottomRight: Radius.circular(radius),
+    );
+
+    // 使用漸層繪製統一的圓角矩形
+    final gradient = _createDataGradient(data, unifiedRect);
+    _barPaint
+      ..style = PaintingStyle.fill
+      ..shader = gradient.createShader(unifiedRect);
+
+    canvasWrapper.drawRRect(rrect, _barPaint);
+
+    // 恢復原來的繪製樣式
+    _barPaint
+      ..style = PaintingStyle.stroke
+      ..shader = null;
+  }
+
+  /// 建立資料漸層
+  LinearGradient _createDataGradient(LineChartData data, Rect rect) {
+    final colors = <Color>[];
+    final stops = <double>[];
+
+    final activeLineBars = data.lineBarsData.where((bar) => bar.show).toList();
+    if (activeLineBars.isEmpty) {
+      return const LinearGradient(
+          colors: [Colors.transparent, Colors.transparent]);
+    }
+
+    // 計算總範圍
+    final totalMinX = data.minX;
+    final totalMaxX = data.maxX;
+    final totalRange = totalMaxX - totalMinX;
+
+    for (final barData in activeLineBars) {
+      if (barData.spots.isEmpty) continue;
+
+      // 只處理有有效顏色的線條資料
+      if (barData.color == null) continue;
+
+      final startX = barData.spots.first.x;
+      final endX = barData.spots.last.x;
+
+      final startRatio = (startX - totalMinX) / totalRange;
+      final endRatio = (endX - totalMinX) / totalRange;
+
+      // 現在可以安全地使用 barData.color!，因為我們已經檢查過不是 null
+      final color = barData.color!;
+      colors.addAll([color, color]);
+      stops.addAll([startRatio, endRatio]);
+    }
+
+    // 如果沒有有效的顏色，返回透明漸層
+    if (colors.isEmpty) {
+      return const LinearGradient(
+          colors: [Colors.transparent, Colors.transparent]);
+    }
+
+    return LinearGradient(
+      colors: colors,
+      stops: stops,
+    );
+  }
+
+  /// 正常繪製所有線條（當不需要統一圓角時）
+  void _drawAllLineBars(
+    CanvasWrapper canvasWrapper,
+    LineChartData data,
+    PaintHolder<LineChartData> holder,
+  ) {
+    for (final barData in data.lineBarsData) {
+      if (!barData.show) continue;
+      drawBarLine(canvasWrapper, barData, holder);
     }
   }
 
@@ -1140,96 +1285,55 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       ..transparentIfWidthIsZero();
 
     barPath = barPath.toDashedPath(barData.dashArray);
-    
-    // 如果啟用端點圓角遮罩，使用裁剪路徑
-    if (barData.enableEndCapsMask && barData.spots.isNotEmpty) {
-      _drawBarWithEndCapsMask(
-        canvasWrapper,
-        barPath,
-        barData,
-        holder,
-        viewSize,
-      );
-    } else {
+
+    // 如果啟用端點圓角遮罩，使用填充模式繪製圓角矩形
+    if (!barData.enableEndCapsMask) {
+      // 正常的描邊模式
       canvasWrapper.drawPath(barPath, _barPaint);
     }
   }
 
-  /// 繪製帶有端點圓角遮罩的線條
-  void _drawBarWithEndCapsMask(
-    CanvasWrapper canvasWrapper,
-    Path barPath,
+  /// 為線條路徑新增圓角端點
+  @visibleForTesting
+  Path addRoundedEndCaps(
+    Path originalPath,
     LineChartBarData barData,
     PaintHolder<LineChartData> holder,
     Size viewSize,
   ) {
-    // 建立裁剪路徑
-    final clipPath = _createEndCapsMaskPath(barData, holder, viewSize);
-
-    // 儲存當前畫布狀態
-    canvasWrapper
-      ..save()
-      // 應用裁剪路徑
-      ..clipPath(clipPath)
-      // 繪製線條
-      ..drawPath(barPath, _barPaint)
-      // 恢復畫布狀態
-      ..restore();
-  }
-
-  /// 建立端點圓角遮罩路徑
-  Path _createEndCapsMaskPath(
-    LineChartBarData barData,
-    PaintHolder<LineChartData> holder,
-    Size viewSize,
-  ) {
-    if (barData.spots.isEmpty) {
-      return Path();
+    if (!barData.enableEndCapsMask || barData.spots.isEmpty) {
+      return originalPath;
     }
 
     final radius = barData.actualEndCapsRadius;
     final halfBarWidth = barData.barWidth / 2;
 
-    // 取得第一個和最後一個點的像素座標
-    final firstSpot = barData.spots.first;
-    final lastSpot = barData.spots.last;
+    // 取得路徑的邊界
+    final bounds = originalPath.getBounds();
 
-    final firstPixel = Offset(
-      getPixelX(firstSpot.x, viewSize, holder),
-      getPixelY(firstSpot.y, viewSize, holder),
+    // 建立新的路徑
+    final newPath = Path();
+
+    // 建立圓角矩形覆蓋整條線
+    final roundedRect = RRect.fromRectAndCorners(
+      Rect.fromLTRB(
+        bounds.left,
+        bounds.center.dy - halfBarWidth,
+        bounds.right,
+        bounds.center.dy + halfBarWidth,
+      ),
+      topLeft: barData.enableLeftEndCap ? Radius.circular(radius) : Radius.zero,
+      bottomLeft:
+          barData.enableLeftEndCap ? Radius.circular(radius) : Radius.zero,
+      topRight:
+          barData.enableRightEndCap ? Radius.circular(radius) : Radius.zero,
+      bottomRight:
+          barData.enableRightEndCap ? Radius.circular(radius) : Radius.zero,
     );
 
-    final lastPixel = Offset(
-      getPixelX(lastSpot.x, viewSize, holder),
-      getPixelY(lastSpot.y, viewSize, holder),
-    );
+    newPath.addRRect(roundedRect);
 
-    final path = Path();
-
-    // 建立覆蓋整個線條區域的形狀
-    final lineRect = Rect.fromLTRB(
-      firstPixel.dx,
-      firstPixel.dy - halfBarWidth - 1,
-      lastPixel.dx,
-      firstPixel.dy + halfBarWidth + 1,
-    );
-
-    // 根據設定決定哪些角要是圓角
-    final leftRadius = barData.enableLeftEndCap ? radius : 0.0;
-    final rightRadius = barData.enableRightEndCap ? radius : 0.0;
-
-    // 建立有選擇性圓角的矩形路徑
-    final rrect = RRect.fromRectAndCorners(
-      lineRect,
-      topLeft: Radius.circular(leftRadius),
-      bottomLeft: Radius.circular(leftRadius),
-      topRight: Radius.circular(rightRadius),
-      bottomRight: Radius.circular(rightRadius),
-    );
-
-    path.addRRect(rrect);
-
-    return path;
+    return newPath;
   }
 
   @visibleForTesting
@@ -1573,7 +1677,10 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
 
   /// 獲取圖表座標系統中的 X 值
   double getChartCoordinateX(
-      double pixelX, Size viewSize, PaintHolder<LineChartData> holder,) {
+    double pixelX,
+    Size viewSize,
+    PaintHolder<LineChartData> holder,
+  ) {
     final data = holder.data;
     final chartUsableSize = holder.getChartUsableSize(viewSize);
 

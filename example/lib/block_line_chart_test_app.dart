@@ -96,7 +96,7 @@ class _BlockLineChartPageState extends State<BlockLineChartPage> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -322,12 +322,12 @@ class _BlockLineChartPageState extends State<BlockLineChartPage> {
     return [
       {
         'start': 0,
-        'end': 23400,
+        'end': 400,
         'color': Colors.indigo[400],
         'activity': '睡眠'
       }, // 0:00 - 6:30 (23400秒)
       {
-        'start': 23400,
+        'start': 400,
         'end': 28800,
         'color': Colors.orange[400],
         'activity': '晨間活動'
